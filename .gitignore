@@ -8,6 +8,10 @@ pnpm-debug.log*
 lerna-debug.log*
 
 /node_modules*
+.claude/
+.agents/skills/*
+!.agents/skills/convex-hackathon-skill/
+!.agents/skills/convex-hackathon-skill/**
 .playwright
 .firecrawl/
 test-results
