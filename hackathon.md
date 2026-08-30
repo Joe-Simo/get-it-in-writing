@@ -65,7 +65,7 @@ manual review step. Production proof now reports one delivery and one verified
 reply. Added owner-only review-route settings and recipient authorization tests
 (`convex/teams.ts`, `convex/emails.ts`, `convex/emails.test.ts`).
 
-### 2026-08-30 - working tree
+### 2026-08-30 - 814fd92
 
 Rebuilt Signal Garden around one concrete promise: it tests an authorized lead
 form every day and emails the owner when the page, submission, or confirmation
