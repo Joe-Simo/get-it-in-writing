@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T20:35:45Z
+- **Last updated:** 2026-08-30T21:19:04Z
 
 ## Log
 
@@ -155,3 +155,16 @@ webhook route rejects unsigned requests. Verified strict lint and type checking,
 20 focused tests, the production build, 14 desktop/mobile browser journeys,
 reduced motion, forced colors, mobile overflow, the final production asset, and
 zero console errors on the live landing page.
+
+### 2026-08-30 - 405840d
+
+Moved the production frontend to a Next.js 16 static export with Geist while
+preserving the private Promise Wallet and Convex Static Hosting path. Replaced
+inbox polling with one authenticated, inbox-scoped AgentMail webhook and a
+least-privilege integration boundary (`app/`, `convex/readiness.ts`,
+`convex/confirmations.ts`, `convex/crons.ts`).
+
+Added delivery-failure and high-risk safety coverage. Verified strict lint and
+type checking, 22 focused tests, the production build, and 14 applicable
+desktop/mobile browser journeys covering keyboard access, reduced motion,
+forced colors, zoom-equivalent layout, and the no-WebGPU fallback.
