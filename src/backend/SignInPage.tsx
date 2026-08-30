@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,11 @@ import { Label } from "@/components/ui/label";
 
 export default function SignInPage() {
   const { signIn } = useAuthActions();
-  const [flow, setFlow] = useState<"signIn" | "signUp">("signIn");
+  const [searchParams] = useSearchParams();
+  const hasSetupLink = searchParams.has("setup");
+  const [flow, setFlow] = useState<"signIn" | "signUp">(
+    hasSetupLink ? "signUp" : "signIn",
+  );
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   return (
@@ -23,8 +27,8 @@ export default function SignInPage() {
             Know whether your lead form actually works.
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/55">
-            See every daily check, confirmation, failure email, and piece of
-            evidence inside one private workspace.
+            See every daily check, confirmation, and failure email inside one
+            private workspace.
           </p>
         </div>
         <p className="text-xs text-white/60">
@@ -58,13 +62,20 @@ export default function SignInPage() {
             <ArrowLeft className="size-4" /> Back to Signal Garden
           </Link>
           <p className="eyebrow text-[#c8ff53]">
-            {flow === "signIn" ? "Welcome back" : "Create your account"}
+            {hasSetupLink
+              ? "Verified setup link"
+              : flow === "signIn"
+                ? "Welcome back"
+                : "Create your account"}
           </p>
           <h2 className="mt-4 font-editorial text-5xl tracking-[-.04em]">
             {flow === "signIn"
-              ? "Continue your work."
-              : "Create your workspace."}
+              ? "Continue monitoring."
+              : hasSetupLink
+                ? "Finish private setup."
+                : "Create your workspace."}
           </h2>
+          {hasSetupLink && <p className="mt-4 max-w-md text-sm leading-relaxed text-white/60">Use the same email address that received this private link. After sign-in, the website is carried into setup automatically.</p>}
           <div className="mt-10 space-y-5">
             <div>
               <Label htmlFor="email">Email</Label>

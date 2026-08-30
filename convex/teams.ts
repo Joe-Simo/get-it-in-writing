@@ -8,7 +8,6 @@ const teamSummary = v.object({
   name: v.string(),
   slug: v.string(),
   role: v.union(v.literal("owner"), v.literal("member")),
-  reviewEmail: v.optional(v.string()),
 });
 
 export const listMine = query({
@@ -35,29 +34,9 @@ export const listMine = query({
               name: team.name,
               slug: team.slug,
               role: membership.role,
-              ...(team.reviewEmail === undefined
-                ? {}
-                : { reviewEmail: team.reviewEmail }),
             },
           ],
     );
-  },
-});
-
-export const setReviewEmail = mutation({
-  args: { teamId: v.id("teams"), email: v.string() },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const membership = await requireTeamMember(ctx, args.teamId);
-    if (membership.role !== "owner") {
-      throw new Error("Only team owners can change the review route");
-    }
-    const email = args.email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new Error("Enter a valid review email address");
-    }
-    await ctx.db.patch("teams", args.teamId, { reviewEmail: email });
-    return null;
   },
 });
 
@@ -66,6 +45,13 @@ export const create = mutation({
   returns: v.id("teams"),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    const existingOwnedTeam = await ctx.db
+      .query("teams")
+      .withIndex("by_ownerId", (q) => q.eq("ownerId", userId))
+      .first();
+    if (existingOwnedTeam !== null) {
+      throw new Error("The private beta supports one website workspace per owner");
+    }
     const name = args.name.trim();
     if (name.length < 2 || name.length > 60) {
       throw new Error("Team name must be between 2 and 60 characters");

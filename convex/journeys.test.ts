@@ -34,6 +34,14 @@ async function createJourneyFixture() {
       role: "member",
       joinedAt: 1,
     });
+    await ctx.db.insert("businessProfiles", {
+      teamId,
+      websiteUrl: "https://example.com",
+      displayName: "Example",
+      timezone: "UTC",
+      createdAt: 1,
+      updatedAt: 1,
+    });
     return { ownerId, memberId, teamId };
   });
   const journeyId = await t
@@ -45,7 +53,7 @@ async function createJourneyFixture() {
       startUrl: "https://example.com/contact",
       goal: "Ask for a quote and know the business received the request.",
       expectedSenderDomain: "example.com",
-      expectedReplyMinutes: 1_440,
+      expectedReplyMinutes: 60,
       cadence: "daily",
       expectsConfirmation: true,
       expectsHumanReply: false,
@@ -79,7 +87,7 @@ test("team members cannot authorize external form submissions for the owner", as
   ).rejects.toThrow("Only the team owner");
 });
 
-test("one real run keeps browser and inbox evidence in the same Convex record", async () => {
+test("one real run keeps the form result and confirmation in the same Convex record", async () => {
   const { t, journeyId, ownerId } = await createJourneyFixture();
   const asOwner = t.withIdentity({ subject: ownerId });
   await asOwner.mutation(api.journeys.activate, {
@@ -94,7 +102,7 @@ test("one real run keeps browser and inbox evidence in the same Convex record", 
 
   await t.mutation(internal.journeys.recordBrowserResult, {
     runId,
-    success: true,
+    outcome: "submitted",
     summary: "The quote request showed a visible success acknowledgement.",
     scrapeId: "scrape_test",
     inboxId: "qa@example.com",
@@ -147,7 +155,7 @@ test("a team member can cancel a waiting run without opening a false incident", 
   });
   await t.mutation(internal.journeys.recordBrowserResult, {
     runId,
-    success: true,
+    outcome: "submitted",
     summary: "The form submitted.",
     inboxId: "qa@example.com",
   });
@@ -223,13 +231,13 @@ test("a customer-facing lead-form failure queues one owner alert", async () => {
 
   await t.mutation(internal.journeys.recordBrowserResult, {
     runId,
-    success: false,
+    outcome: "failed",
     summary: "The public form did not accept the test lead.",
     failureKind: "form",
   });
   await t.mutation(internal.journeys.recordBrowserResult, {
     runId,
-    success: false,
+    outcome: "failed",
     summary: "The repeated provider callback reported the same form failure.",
     failureKind: "form",
   });
@@ -253,4 +261,77 @@ test("a customer-facing lead-form failure queues one owner alert", async () => {
     status: "pending",
     attemptCount: 0,
   });
+});
+
+test("a safety stop pauses monitoring without opening a false incident", async () => {
+  const { t, journeyId, ownerId } = await createJourneyFixture();
+  await t.withIdentity({ subject: ownerId }).mutation(api.journeys.activate, {
+    journeyId,
+    authorizedPublicFormTesting: true,
+  });
+  const runId = await t.mutation(internal.journeys.createRun, {
+    journeyId,
+    trigger: "manual",
+    requesterId: ownerId,
+  });
+
+  await t.mutation(internal.journeys.recordBrowserResult, {
+    runId,
+    outcome: "blocked",
+    summary: "A captcha requires the owner to review this form.",
+    failureKind: "form",
+  });
+
+  const result = await t.run(async (ctx) => ({
+    run: await ctx.db.get("journeyRuns", runId),
+    journey: await ctx.db.get("customerJourneys", journeyId),
+    incidents: await ctx.db
+      .query("journeyIncidents")
+      .withIndex("by_runId", (q) => q.eq("runId", runId))
+      .collect(),
+    alerts: await ctx.db
+      .query("journeyAlertDeliveries")
+      .withIndex("by_status_and_updatedAt", (q) => q.eq("status", "pending"))
+      .collect(),
+  }));
+  expect(result.run).toMatchObject({ status: "blocked" });
+  expect(result.journey).toMatchObject({
+    status: "needs_review",
+    enabled: false,
+  });
+  expect(result.incidents).toHaveLength(0);
+  expect(result.alerts).toHaveLength(0);
+});
+
+test("a workspace can monitor only one daily form on its configured website", async () => {
+  const { t, teamId, ownerId } = await createJourneyFixture();
+  const asOwner = t.withIdentity({ subject: ownerId });
+
+  await expect(
+    asOwner.mutation(api.journeys.create, {
+      teamId,
+      name: "Second contact form",
+      kind: "contact",
+      startUrl: "https://example.com/contact-two",
+      goal: "Verify another contact form.",
+      expectedReplyMinutes: 60,
+      cadence: "daily",
+      expectsConfirmation: false,
+      expectsHumanReply: false,
+    }),
+  ).rejects.toThrow("one lead form per workspace");
+
+  await expect(
+    asOwner.mutation(api.journeys.create, {
+      teamId,
+      name: "Wrong website",
+      kind: "contact",
+      startUrl: "https://not-example.test/contact",
+      goal: "Verify a form on another website.",
+      expectedReplyMinutes: 60,
+      cadence: "daily",
+      expectsConfirmation: false,
+      expectsHumanReply: false,
+    }),
+  ).rejects.toThrow("workspace website");
 });

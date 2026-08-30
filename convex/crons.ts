@@ -4,21 +4,14 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 crons.interval(
-  "check due solicitation watches",
-  { hours: 1 },
-  internal.watchActions.checkDue,
-  {},
-);
-
-crons.interval(
-  "run due customer journeys",
+  "run due lead-form checks",
   { minutes: 30 },
   internal.journeyActions.runDue,
   {},
 );
 
 crons.interval(
-  "reconcile AgentMail journey confirmations",
+  "reconcile lead-form confirmations",
   { minutes: 1 },
   internal.journeyActions.reconcileAgentMail,
   {},

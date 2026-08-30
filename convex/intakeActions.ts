@@ -1,6 +1,6 @@
 "use node";
 
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { AgentMailClient } from "agentmail";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -40,9 +40,13 @@ export const requestAudit = action({
       .match(/\bSG-[A-F0-9]{8}\b/i)?.[0]
       .toUpperCase();
     const emailHash = createHash("sha256").update(email).digest("hex");
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
     const requestId = await ctx.runMutation(internal.intake.reserve, {
       websiteUrl,
       emailHash,
+      tokenHash,
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1_000,
       ...(reference === undefined ? {} : { testReference: reference }),
     });
     const apiKey = process.env.AGENTMAIL_API_KEY;
@@ -53,16 +57,18 @@ export const requestAudit = action({
       throw new Error("Email confirmation is temporarily unavailable");
     }
     const domain = websiteDomain(websiteUrl);
+    const setupUrl = new URL("/app", appUrl);
+    setupUrl.searchParams.set("setup", token);
     const referenceLine = reference
-      ? `\n\nJourney reference: ${reference}`
+      ? `\n\nCheck reference: ${reference}`
       : "";
     const client = new AgentMailClient({ apiKey });
     try {
       const message = await client.inboxes.messages.send(inboxId, {
         to: email,
         subject: `Set up daily lead-form monitoring for ${domain}`,
-        text: `Signal Garden checks your public lead form every day and emails you if the page, form, or confirmation stops working.\n\nSet up your check: ${new URL("/app", appUrl).toString()}\n\nFree private beta. No card required. No test will run until you sign in, review the exact form, and confirm that you are authorized to test it.${referenceLine}`,
-        html: `<main style="font-family:system-ui;max-width:620px;margin:auto;color:#111"><p style="font-size:12px;text-transform:uppercase;letter-spacing:.12em">Signal Garden</p><h1>Know when the lead form on ${escapeHtml(domain)} stops working.</h1><p>Signal Garden checks the public form every day and emails you if the page, submission, or confirmation fails.</p><p><a href="${escapeHtml(new URL("/app", appUrl).toString())}">Review and activate the check</a></p><p><strong>Free private beta. No card required.</strong></p><p style="color:#555">No test will run until you sign in, review the exact form, and confirm that you are authorized to test it.</p>${reference ? `<p>Check reference: ${escapeHtml(reference)}</p>` : ""}</main>`,
+        text: `Signal Garden checks your public lead form every day and emails you if the page, submission, or expected confirmation stops working.\n\nContinue your private setup within seven days: ${setupUrl.toString()}\n\nThis link is tied to this email address. No test runs until you sign in, review the exact form, and confirm that you are authorized to test it.${referenceLine}`,
+        html: `<main style="font-family:system-ui;max-width:620px;margin:auto;color:#111"><p style="font-size:12px;text-transform:uppercase;letter-spacing:.12em">Signal Garden</p><h1>Know when the lead form on ${escapeHtml(domain)} stops working.</h1><p>Signal Garden checks the public form every day and emails you if the page, submission, or expected confirmation fails.</p><p><a href="${escapeHtml(setupUrl.toString())}">Continue private setup</a></p><p><strong>This private link expires in seven days and only works with this email address.</strong></p><p style="color:#555">No test runs until you sign in, review the exact form, and confirm that you are authorized to test it.</p>${reference ? `<p>Check reference: ${escapeHtml(reference)}</p>` : ""}</main>`,
       });
       await ctx.runMutation(internal.intake.markSent, {
         requestId,

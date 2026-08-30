@@ -48,24 +48,31 @@ export const getStatus = query({
     enabled: v.boolean(),
     lastTestStatus: v.union(v.null(), deliveryStatus),
     lastTestAt: v.union(v.null(), v.number()),
+    alertDeliveryProblemCount: v.number(),
   }),
   handler: async (ctx, args) => {
     await requireTeamMember(ctx, args.teamId);
     const team = await ctx.db.get("teams", args.teamId);
     if (team === null) throw new Error("404: team not found");
     const owner = await ctx.db.get("users", team.ownerId);
-    const recipientEmail = team.reviewEmail ?? owner?.email;
+    const recipientEmail = owner?.email;
     const recent = await ctx.db
       .query("journeyAlertDeliveries")
       .withIndex("by_teamId_and_createdAt", (q) => q.eq("teamId", args.teamId))
       .order("desc")
-      .take(20);
+      .take(100);
     const latestTest = recent.find((delivery) => delivery.kind === "test");
     return {
       enabled:
         typeof recipientEmail === "string" && emailPattern.test(recipientEmail),
       lastTestStatus: latestTest?.status ?? null,
       lastTestAt: latestTest?.createdAt ?? null,
+      alertDeliveryProblemCount: recent.filter(
+        (delivery) =>
+          delivery.kind === "incident" &&
+          delivery.status === "failed" &&
+          delivery.attemptCount >= 5,
+      ).length,
     };
   },
 });
@@ -89,7 +96,7 @@ export const reserveTest = internalMutation({
     const team = await ctx.db.get("teams", args.teamId);
     if (team === null) throw new Error("404: team not found");
     const owner = await ctx.db.get("users", team.ownerId);
-    const recipientEmail = team.reviewEmail ?? owner?.email;
+    const recipientEmail = owner?.email;
     if (typeof recipientEmail !== "string" || !emailPattern.test(recipientEmail)) {
       throw new Error("Add a valid owner email before testing alerts");
     }
@@ -124,7 +131,7 @@ export const getDeliveryContext = internalQuery({
     const team = await ctx.db.get("teams", delivery.teamId);
     if (team === null) return null;
     const owner = await ctx.db.get("users", team.ownerId);
-    const recipientEmail = team.reviewEmail ?? owner?.email;
+    const recipientEmail = owner?.email;
     if (typeof recipientEmail !== "string" || !emailPattern.test(recipientEmail)) {
       return null;
     }
@@ -170,7 +177,13 @@ export const claim = internalMutation({
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const delivery = await ctx.db.get("journeyAlertDeliveries", args.deliveryId);
-    if (delivery === null || delivery.status === "sent") return false;
+    if (
+      delivery === null ||
+      delivery.status === "sent" ||
+      delivery.attemptCount >= 5
+    ) {
+      return false;
+    }
     const now = Date.now();
     if (
       delivery.status === "sending" &&
@@ -230,27 +243,28 @@ export const markFailed = internalMutation({
 });
 
 export const listDue = internalQuery({
-  args: {},
+  args: { now: v.number() },
   returns: v.array(v.id("journeyAlertDeliveries")),
-  handler: async (ctx) => {
-    const now = Date.now();
+  handler: async (ctx, args) => {
     const [pending, failed, stale] = await Promise.all([
       ctx.db
         .query("journeyAlertDeliveries")
         .withIndex("by_status_and_updatedAt", (q) =>
-          q.eq("status", "pending").lte("updatedAt", now),
+          q.eq("status", "pending").lte("updatedAt", args.now),
         )
         .take(25),
       ctx.db
         .query("journeyAlertDeliveries")
         .withIndex("by_status_and_updatedAt", (q) =>
-          q.eq("status", "failed").lt("updatedAt", now - testAlertCooldownMs),
+          q
+            .eq("status", "failed")
+            .lt("updatedAt", args.now - testAlertCooldownMs),
         )
         .take(15),
       ctx.db
         .query("journeyAlertDeliveries")
         .withIndex("by_status_and_updatedAt", (q) =>
-          q.eq("status", "sending").lt("updatedAt", now - sendingLeaseMs),
+          q.eq("status", "sending").lt("updatedAt", args.now - sendingLeaseMs),
         )
         .take(10),
     ]);

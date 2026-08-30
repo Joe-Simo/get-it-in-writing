@@ -24,13 +24,3 @@ export async function requireTeamMember(
   if (membership === null) throw new Error("403: team membership required");
   return { userId, role: membership.role };
 }
-
-export async function requireMissionMember(
-  ctx: ReadCtx,
-  missionId: Id<"missions">,
-) {
-  const mission = await ctx.db.get("missions", missionId);
-  if (mission === null) throw new Error("404: mission not found");
-  const membership = await requireTeamMember(ctx, mission.teamId);
-  return { mission, ...membership };
-}

@@ -3,26 +3,6 @@
 import { Webhook } from "svix";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
-import { verifyFirecrawlWebhook } from "./lib/webhookAuth";
-
-export const verifyFirecrawl = internalAction({
-  args: {
-    payload: v.string(),
-    signature: v.string(),
-    authorization: v.string(),
-  },
-  returns: v.boolean(),
-  handler: async (_ctx, args) => {
-    const secret = process.env.FIRECRAWL_WEBHOOK_SECRET;
-    if (!secret) return false;
-    return verifyFirecrawlWebhook(
-      args.payload,
-      secret,
-      args.signature,
-      args.authorization,
-    );
-  },
-});
 
 export const verifyAgentMail = internalAction({
   args: {

@@ -42,6 +42,7 @@ const checkpointStatus = v.union(
   v.literal("pending"),
   v.literal("verified"),
   v.literal("failed"),
+  v.literal("blocked"),
   v.literal("waiting"),
   v.literal("skipped"),
 );
@@ -52,6 +53,7 @@ const runStatus = v.union(
   v.literal("waiting"),
   v.literal("healthy"),
   v.literal("incident"),
+  v.literal("blocked"),
   v.literal("error"),
   v.literal("cancelled"),
 );
@@ -61,6 +63,7 @@ const journeyStatus = v.union(
   v.literal("running"),
   v.literal("healthy"),
   v.literal("incident"),
+  v.literal("needs_review"),
   v.literal("error"),
 );
 
@@ -134,6 +137,22 @@ const incidentView = v.object({
   resolutionNote: v.optional(v.string()),
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),
+  alertStatus: v.optional(
+    v.union(
+      v.literal("pending"),
+      v.literal("sending"),
+      v.literal("sent"),
+      v.literal("failed"),
+    ),
+  ),
+  alertAttemptCount: v.optional(v.number()),
+  alertFailureCode: v.optional(
+    v.union(
+      v.literal("configuration"),
+      v.literal("recipient"),
+      v.literal("delivery"),
+    ),
+  ),
 });
 
 function nextRunAt(cadenceValue: "manual" | "daily" | "weekly", now: number) {
@@ -187,6 +206,9 @@ export const upsertBusiness = mutation({
       .unique();
     const now = Date.now();
     if (existing !== null) {
+      if (websiteDomain(existing.websiteUrl) !== websiteDomain(websiteUrl)) {
+        throw new Error("This private beta monitors one website per workspace");
+      }
       await ctx.db.patch("businessProfiles", existing._id, {
         websiteUrl,
         displayName,
@@ -363,6 +385,42 @@ export const get = query({
         };
       }),
     );
+    const incidentViews = await Promise.all(
+      incidents.map(async (incident) => {
+        const delivery = await ctx.db
+          .query("journeyAlertDeliveries")
+          .withIndex("by_incidentId", (q) => q.eq("incidentId", incident._id))
+          .first();
+        return {
+          _id: incident._id,
+          runId: incident.runId,
+          checkpointKind: incident.checkpointKind,
+          title: incident.title,
+          detail: incident.detail,
+          severity: incident.severity,
+          status: incident.status,
+          ...(incident.ownerLabel === undefined
+            ? {}
+            : { ownerLabel: incident.ownerLabel }),
+          ...(incident.resolutionNote === undefined
+            ? {}
+            : { resolutionNote: incident.resolutionNote }),
+          createdAt: incident.createdAt,
+          ...(incident.resolvedAt === undefined
+            ? {}
+            : { resolvedAt: incident.resolvedAt }),
+          ...(delivery === null
+            ? {}
+            : {
+                alertStatus: delivery.status,
+                alertAttemptCount: delivery.attemptCount,
+                ...(delivery.failureCode === undefined
+                  ? {}
+                  : { alertFailureCode: delivery.failureCode }),
+              }),
+        };
+      }),
+    );
     return {
       journey: {
         _id: journey._id,
@@ -393,25 +451,7 @@ export const get = query({
         instruction: step.instruction,
       })),
       runs: runViews,
-      incidents: incidents.map((incident) => ({
-        _id: incident._id,
-        runId: incident.runId,
-        checkpointKind: incident.checkpointKind,
-        title: incident.title,
-        detail: incident.detail,
-        severity: incident.severity,
-        status: incident.status,
-        ...(incident.ownerLabel === undefined
-          ? {}
-          : { ownerLabel: incident.ownerLabel }),
-        ...(incident.resolutionNote === undefined
-          ? {}
-          : { resolutionNote: incident.resolutionNote }),
-        createdAt: incident.createdAt,
-        ...(incident.resolvedAt === undefined
-          ? {}
-          : { resolvedAt: incident.resolvedAt }),
-      })),
+      incidents: incidentViews,
       ...(publicReport === null ? {} : { publicSlug: publicReport.slug }),
     };
   },
@@ -434,11 +474,35 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const { userId } = await requireTeamMember(ctx, args.teamId);
     const startUrl = normalizePublicWebsiteUrl(args.startUrl);
-    const name = boundedPlainText(args.name, "Journey name", 80);
-    const goal = boundedPlainText(args.goal, "Customer goal", 240);
+    if (!["contact", "lead_form", "quote_request"].includes(args.kind)) {
+      throw new Error("Only public contact, lead, and quote forms are supported");
+    }
+    if (args.cadence !== "daily") {
+      throw new Error("Signal Garden checks the approved form once per day");
+    }
+    if (args.expectsHumanReply) {
+      throw new Error("This product monitors form delivery, not staff response times");
+    }
+    const profile = await ctx.db
+      .query("businessProfiles")
+      .withIndex("by_teamId", (q) => q.eq("teamId", args.teamId))
+      .unique();
+    if (profile === null) throw new Error("Add the business website first");
+    if (websiteDomain(profile.websiteUrl) !== websiteDomain(startUrl)) {
+      throw new Error("The monitored form must belong to this workspace website");
+    }
+    const existingJourney = await ctx.db
+      .query("customerJourneys")
+      .withIndex("by_teamId", (q) => q.eq("teamId", args.teamId))
+      .first();
+    if (existingJourney !== null) {
+      throw new Error("The private beta monitors one lead form per workspace");
+    }
+    const name = boundedPlainText(args.name, "Form name", 80);
+    const goal = boundedPlainText(args.goal, "Form purpose", 240);
     const replyMinutes = Math.max(
       15,
-      Math.min(10_080, Math.trunc(args.expectedReplyMinutes)),
+      Math.min(240, Math.trunc(args.expectedReplyMinutes)),
     );
     const sender = args.expectedSenderDomain
       ?.trim()
@@ -447,9 +511,6 @@ export const create = mutation({
       .replace(/^www\./, "");
     if (sender && !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(sender)) {
       throw new Error("Expected sender must be a domain such as example.com");
-    }
-    if (args.expectsHumanReply && !args.expectsConfirmation) {
-      throw new Error("A human reply journey must also verify email delivery");
     }
     const now = Date.now();
     const journeyId = await ctx.db.insert("customerJourneys", {
@@ -481,15 +542,15 @@ export const create = mutation({
         kind: "form",
         label: "Test lead submitted",
         instruction:
-          "Complete only the approved public contact, quote, booking, or signup form using the clearly labeled QA identity.",
+          "Complete only the approved public contact, lead, or quote form using a clearly labeled Signal Garden test lead.",
       },
     ];
     if (args.expectsConfirmation) {
       steps.push({
         kind: "confirmation",
-        label: "Confirmation issued",
+        label: "Confirmation email received",
         instruction:
-          "Verify that the correlated acknowledgement reaches the test-customer inbox.",
+          `Wait up to ${replyMinutes} minutes for the expected confirmation email to reach the private test inbox.`,
       });
     }
     if (args.expectsHumanReply) {
@@ -530,6 +591,7 @@ export const activate = mutation({
     const now = Date.now();
     await ctx.db.patch("customerJourneys", journey._id, {
       enabled: true,
+      status: "draft",
       authorizedAt: now,
       authorizedBy: userId,
       nextRunAt: nextRunAt(journey.cadence, now),
@@ -598,7 +660,7 @@ export const cancelActiveRun = mutation({
         .map((checkpoint) =>
           ctx.db.patch("journeyCheckpoints", checkpoint._id, {
             status: "skipped",
-            detail: "The team cancelled this run before the handoff completed.",
+            detail: "The team cancelled this check before it completed.",
             occurredAt: now,
           }),
         ),
@@ -653,7 +715,7 @@ export const publish = mutation({
       .order("desc")
       .first();
     if (latestRun === null || latestRun.status === "queued") {
-      throw new Error("Run the journey before publishing its evidence");
+      throw new Error("Run the lead-form check before publishing its report");
     }
     const existing = await ctx.db
       .query("publicJourneyReports")
@@ -1024,7 +1086,11 @@ async function createIncident(
 export const recordBrowserResult = internalMutation({
   args: {
     runId: v.id("journeyRuns"),
-    success: v.boolean(),
+    outcome: v.union(
+      v.literal("submitted"),
+      v.literal("blocked"),
+      v.literal("failed"),
+    ),
     summary: v.string(),
     scrapeId: v.optional(v.string()),
     evidenceUrl: v.optional(v.string()),
@@ -1035,6 +1101,13 @@ export const recordBrowserResult = internalMutation({
   handler: async (ctx, args) => {
     const run = await ctx.db.get("journeyRuns", args.runId);
     if (run === null) return null;
+    if (
+      ["healthy", "incident", "blocked", "error", "cancelled"].includes(
+        run.status,
+      )
+    ) {
+      return null;
+    }
     const journey = await ctx.db.get("customerJourneys", run.journeyId);
     if (journey === null) return null;
     const checkpoints = await ctx.db
@@ -1042,15 +1115,64 @@ export const recordBrowserResult = internalMutation({
       .withIndex("by_runId_and_order", (q) => q.eq("runId", run._id))
       .take(10);
     const now = Date.now();
-    if (!args.success) {
+    if (args.outcome !== "submitted") {
       const failedKind = args.failureKind ?? "form";
-      const failed = checkpoints.find((step) => step.kind === failedKind);
-      if (failed !== undefined) {
-        await ctx.db.patch("journeyCheckpoints", failed._id, {
-          status: "failed",
+      const stopped = checkpoints.find((step) => step.kind === failedKind);
+      if (failedKind === "form") {
+        const website = checkpoints.find((step) => step.kind === "website");
+        if (website !== undefined) {
+          await ctx.db.patch("journeyCheckpoints", website._id, {
+            status: "verified",
+            detail: "The public lead-form page loaded successfully.",
+            occurredAt: now,
+          });
+        }
+      }
+      if (stopped !== undefined) {
+        await ctx.db.patch("journeyCheckpoints", stopped._id, {
+          status: args.outcome === "blocked" ? "blocked" : "failed",
           detail: args.summary,
           occurredAt: now,
         });
+      }
+      await Promise.all(
+        checkpoints
+          .filter(
+            (checkpoint) =>
+              (stopped === undefined || checkpoint._id !== stopped._id) &&
+              checkpoint.kind !== "website" &&
+              checkpoint.status === "pending",
+          )
+          .map((checkpoint) =>
+            ctx.db.patch("journeyCheckpoints", checkpoint._id, {
+              status: "skipped",
+              detail:
+                args.outcome === "blocked"
+                  ? "This step was not attempted because the form required owner review."
+                  : "This step was not reached after the earlier failure.",
+              occurredAt: now,
+            }),
+          ),
+      );
+      if (args.outcome === "blocked") {
+        await ctx.db.patch("journeyRuns", run._id, {
+          status: "blocked",
+          summary: args.summary,
+          ...(args.scrapeId === undefined
+            ? {}
+            : { firecrawlScrapeId: args.scrapeId }),
+          ...(args.evidenceUrl === undefined
+            ? {}
+            : { evidenceUrl: args.evidenceUrl }),
+          completedAt: now,
+        });
+        await ctx.db.patch("customerJourneys", journey._id, {
+          status: "needs_review",
+          enabled: false,
+          nextRunAt: undefined,
+          updatedAt: now,
+        });
+        return null;
       }
       await createIncident(ctx, {
         runId: run._id,
@@ -1113,12 +1235,12 @@ export const recordBrowserResult = internalMutation({
           : { expectedSenderDomain: journey.expectedSenderDomain }),
         expectedKind: "confirmation",
         status: "waiting",
-        deadlineAt: now + 15 * 60 * 1_000,
+        deadlineAt: now + journey.expectedReplyMinutes * 60 * 1_000,
         createdAt: now,
       });
       await ctx.db.patch("journeyRuns", run._id, {
         status: "waiting",
-        summary: "The customer request was submitted; email confirmation is pending.",
+        summary: `The test lead was submitted; waiting up to ${journey.expectedReplyMinutes} minutes for the expected confirmation email.`,
         ...(args.scrapeId === undefined
           ? {}
           : { firecrawlScrapeId: args.scrapeId }),
@@ -1152,6 +1274,7 @@ export const findEmailExpectation = internalQuery({
     inboxId: v.string(),
     senderDomain: v.string(),
     content: v.string(),
+    now: v.number(),
   },
   returns: v.union(
     v.null(),
@@ -1172,10 +1295,9 @@ export const findEmailExpectation = internalQuery({
       )
       .order("desc")
       .take(20);
-    const now = Date.now();
     const matched = waiting.find(
       (expectation) =>
-        expectation.deadlineAt >= now &&
+        expectation.deadlineAt >= args.now &&
         (args.content
           .toLowerCase()
           .includes(expectation.correlationToken.toLowerCase()) ||
@@ -1201,7 +1323,7 @@ export const recordRunError = internalMutation({
     const run = await ctx.db.get("journeyRuns", args.runId);
     if (
       run === null ||
-      ["healthy", "incident", "cancelled"].includes(run.status)
+      ["healthy", "incident", "blocked", "cancelled"].includes(run.status)
     ) {
       return null;
     }
@@ -1250,6 +1372,11 @@ export const recordEmailReceived = internalMutation({
       args.expectationId,
     );
     if (expectation === null || expectation.status !== "waiting") return false;
+    const alreadyMatched = await ctx.db
+      .query("journeyEmailExpectations")
+      .withIndex("by_messageId", (q) => q.eq("messageId", args.messageId))
+      .first();
+    if (alreadyMatched !== null) return false;
     const run = await ctx.db.get("journeyRuns", expectation.runId);
     const journey = await ctx.db.get("customerJourneys", expectation.journeyId);
     if (run === null || journey === null) return false;
@@ -1271,7 +1398,7 @@ export const recordEmailReceived = internalMutation({
         status: "verified",
         detail:
           expectation.expectedKind === "confirmation"
-            ? "The correlated confirmation reached the test-customer inbox."
+            ? "The expected confirmation email reached the private test inbox."
             : "The test-customer inbox received a follow-up reply.",
         evidenceExcerpt: args.evidenceExcerpt.slice(0, 600),
         occurredAt: now,
@@ -1314,8 +1441,8 @@ export const recordEmailReceived = internalMutation({
       status: "healthy",
       summary:
         expectation.expectedKind === "confirmation"
-          ? "The customer request and correlated confirmation dispatch both completed."
-          : "The complete customer journey, including the human reply, completed.",
+          ? "The test lead was accepted and the expected confirmation email arrived."
+          : "The monitored form and follow-up reply both completed.",
       completedAt: now,
     });
     await ctx.db.patch("customerJourneys", journey._id, {
@@ -1358,7 +1485,7 @@ export const expireDueEmailExpectations = internalMutation({
           : "Customer is still waiting for a reply";
       const detail =
         expectation.expectedKind === "confirmation"
-          ? "The request was submitted, but no correlated acknowledgement appeared in the QA mailbox within 15 minutes."
+          ? `The test lead was submitted, but the expected confirmation email did not arrive within ${journey.expectedReplyMinutes} minutes.`
           : `No follow-up reply arrived within the promised ${journey.expectedReplyMinutes} minutes.`;
       if (checkpoint !== undefined) {
         await ctx.db.patch("journeyCheckpoints", checkpoint._id, {
@@ -1391,7 +1518,7 @@ export const expireDueEmailExpectations = internalMutation({
 });
 
 export const listWaitingEmailExpectations = internalQuery({
-  args: {},
+  args: { now: v.number() },
   returns: v.array(
     v.object({
       expectationId: v.id("journeyEmailExpectations"),
@@ -1402,13 +1529,15 @@ export const listWaitingEmailExpectations = internalQuery({
         v.literal("human_reply"),
       ),
       createdAt: v.number(),
+      deadlineAt: v.number(),
+      expectedSenderDomain: v.optional(v.string()),
     }),
   ),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const expectations = await ctx.db
       .query("journeyEmailExpectations")
       .withIndex("by_status_and_deadlineAt", (q) =>
-        q.eq("status", "waiting").gte("deadlineAt", Date.now()),
+        q.eq("status", "waiting").gte("deadlineAt", args.now),
       )
       .take(50);
     return expectations.map((expectation) => ({
@@ -1417,19 +1546,22 @@ export const listWaitingEmailExpectations = internalQuery({
       correlationToken: expectation.correlationToken,
       expectedKind: expectation.expectedKind,
       createdAt: expectation.createdAt,
+      deadlineAt: expectation.deadlineAt,
+      ...(expectation.expectedSenderDomain === undefined
+        ? {}
+        : { expectedSenderDomain: expectation.expectedSenderDomain }),
     }));
   },
 });
 
 export const listDue = internalQuery({
-  args: {},
+  args: { now: v.number() },
   returns: v.array(v.id("customerJourneys")),
-  handler: async (ctx) => {
-    const now = Date.now();
+  handler: async (ctx, args) => {
     const due = await ctx.db
       .query("customerJourneys")
       .withIndex("by_enabled_and_nextRunAt", (q) =>
-        q.eq("enabled", true).lte("nextRunAt", now),
+        q.eq("enabled", true).lte("nextRunAt", args.now),
       )
       .take(50);
     return due.map((journey) => journey._id);

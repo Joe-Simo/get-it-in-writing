@@ -89,13 +89,13 @@ function Hero() {
       <div className="grid min-h-[690px] border-l border-t border-black/20 lg:grid-cols-[1.08fr_.92fr]">
         <div className="flex flex-col justify-between border-b border-r border-black/20 p-6 md:p-9 lg:p-12">
           <div>
-            <p className="max-w-xl text-sm font-medium text-black/60">Daily monitoring for the forms that create your customers.</p>
+            <p className="max-w-xl text-sm font-medium text-black/60">Daily monitoring for the website form that brings you business.</p>
             <h1 className="mt-10 max-w-5xl text-[clamp(4rem,8vw,8.4rem)] font-semibold leading-[.8] tracking-[-.082em]">
               We test your lead form every day.
               <span className="mt-3 block font-editorial font-normal italic tracking-[-.06em]">If it breaks, we email you.</span>
             </h1>
             <p className="mt-10 max-w-2xl text-balance text-xl leading-[1.38] tracking-[-.025em] text-black/72 md:text-2xl">
-              Signal Garden submits a clearly labeled test lead, checks the success message and confirmation email, and tells you exactly what failed.
+              Signal Garden sends one clearly labeled test lead, checks what the visitor sees, and waits for the confirmation email when your site promises one.
             </p>
           </div>
           <div className="mt-12">
@@ -117,13 +117,13 @@ function DailyCheckCard() {
     { icon: Globe2, title: "Website opens", detail: "The public form page loads for a real visitor." },
     { icon: MousePointer2, title: "Form accepts a test lead", detail: "A clearly labeled QA submission completes safely." },
     { icon: MailCheck, title: "Confirmation arrives", detail: "The expected acknowledgement reaches the test inbox." },
-    { icon: CircleAlert, title: "Owner gets emailed if anything fails", detail: "The alert names the broken step and links to evidence." },
+    { icon: CircleAlert, title: "Owner gets emailed if anything fails", detail: "The alert names the broken step and opens the check details." },
   ];
   return (
     <div id="checks" className="border-b border-r border-black/20 bg-[#0b0e0c] p-5 text-[#f3efe6] md:p-8 lg:p-10">
       <div className="flex items-center justify-between border-b border-white/15 pb-5">
         <div><p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#c8ff53]">Daily lead-form check</p><h2 className="mt-2 text-2xl font-semibold tracking-[-.04em]">One real test. Every day.</h2></div>
-        <span className="flex items-center gap-2 text-xs text-white/65"><span className="size-2 rounded-full bg-[#c8ff53]" /> Monitoring</span>
+        <span className="font-mono text-xs text-white/55">1 check / day</span>
       </div>
       <div className="mt-7">
         {steps.map(({ icon: Icon, title, detail }, index) => (
@@ -143,9 +143,9 @@ function DailyCheckCard() {
 
 function HowItWorks() {
   const items = [
-    { index: "01", title: "Add your website", body: "Signal Garden finds the public contact, quote, and demo forms that could become a customer." },
+    { index: "01", title: "Add your website", body: "Signal Garden finds the public contact, quote, or demo form closest to a new customer." },
     { index: "02", title: "Approve the form", body: "Review the exact page and test. Nothing is submitted until an owner confirms permission." },
-    { index: "03", title: "Get emailed if it breaks", body: "A daily check verifies the page, submission, and confirmation. The failure email links directly to the evidence." },
+    { index: "03", title: "Get emailed if it breaks", body: "A daily check verifies the page, submission, and expected confirmation. The email names the broken step and opens the check details." },
   ];
   return (
     <section id="how-it-works" className="px-5 py-20 md:px-8 lg:px-12 lg:py-28">
@@ -172,13 +172,13 @@ function AlertSection() {
   return (
     <section className="border-y border-black/20 bg-[#0b0e0c] px-5 py-20 text-[#f3efe6] md:px-8 lg:px-12 lg:py-28">
       <div className="grid gap-12 lg:grid-cols-[.82fr_1.18fr] lg:items-center">
-        <div><p className="eyebrow text-[#c8ff53]">The alert / 02</p><h2 className="mt-5 max-w-3xl text-5xl font-semibold leading-[.9] tracking-[-.062em] md:text-7xl">The email tells you what failed.</h2><p className="mt-6 max-w-xl text-lg leading-relaxed text-white/65">No server jargon. Open the message, see the broken step, inspect the evidence, and rerun the check after the fix.</p></div>
+        <div><p className="eyebrow text-[#c8ff53]">The alert / 02</p><h2 className="mt-5 max-w-3xl text-5xl font-semibold leading-[.9] tracking-[-.062em] md:text-7xl">The email tells you what failed.</h2><p className="mt-6 max-w-xl text-lg leading-relaxed text-white/65">No server jargon. Open the message, see the broken step, review what happened, and rerun the check after the fix.</p></div>
         <div className="border border-white/18 bg-white/[.025]">
           <div className="flex items-center gap-3 border-b border-white/15 p-5"><span className="grid size-9 place-items-center rounded-full bg-[#ff7c68]/15 text-[#ff9a8a]"><CircleAlert className="size-4" /></span><div><p className="text-sm font-semibold">Lead form check failed on your website</p><p className="text-xs text-white/65">Email alert</p></div></div>
           <div className="grid gap-px bg-white/15 sm:grid-cols-3">
             <div className="bg-[#0b0e0c] p-5"><p className="font-mono text-[10px] uppercase tracking-[.15em] text-white/65">Broken step</p><p className="mt-3 text-lg font-semibold">Confirmation missing</p></div>
             <div className="bg-[#0b0e0c] p-5"><p className="font-mono text-[10px] uppercase tracking-[.15em] text-white/65">Last worked</p><p className="mt-3 text-lg font-semibold">Form accepted</p></div>
-            <div className="bg-[#0b0e0c] p-5"><p className="font-mono text-[10px] uppercase tracking-[.15em] text-white/65">Next action</p><p className="mt-3 text-lg font-semibold">Open evidence</p></div>
+            <div className="bg-[#0b0e0c] p-5"><p className="font-mono text-[10px] uppercase tracking-[.15em] text-white/65">Next action</p><p className="mt-3 text-lg font-semibold">Open check details</p></div>
           </div>
           <div className="p-5 text-sm leading-relaxed text-white/65">This shows the information every failure alert contains. Actual alerts use the result from your own authorized check.</div>
         </div>
@@ -208,10 +208,10 @@ function ProofSection() {
   return (
     <section id="proof" className="border-y border-black/20 bg-[#ded9ce] px-5 py-20 md:px-8 lg:px-12 lg:py-24">
       <div className="grid gap-10 lg:grid-cols-[.7fr_1.3fr]">
-        <div><p className="eyebrow">Real proof / 04</p><h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.06em]">See the check that actually ran.</h2></div>
+        <div><p className="eyebrow">Real check / 04</p><h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.06em]">See the check that actually ran.</h2></div>
         <div className="border border-black/20 bg-[#f3efe6] p-6 md:p-8">
-          <div className="flex items-center gap-3"><ShieldCheck className="size-5 text-[#4f7134]" /><p className="font-semibold">Each report comes from a real owner-authorized run.</p></div>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-black/65">The public report shows the page, form, and confirmation result while excluding form contents, email addresses, and private customer data.</p>
+          <div className="flex items-center gap-3"><ShieldCheck className="size-5 text-[#4f7134]" /><p className="font-semibold">This report comes from a real owner-authorized check.</p></div>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-black/65">It shows whether the page opened, the form accepted the test lead, and the expected confirmation arrived. Form contents and email addresses stay private.</p>
           {featuredReportSlug ? <Button asChild variant="outline" className="mt-6 rounded-full bg-transparent"><Link to={`/proof/${featuredReportSlug}`}>Inspect the latest real check <ExternalLink /></Link></Button> : <p className="mt-6 inline-flex items-center gap-2 border border-black/20 px-4 py-2 text-xs text-black/65"><span className="size-2 rounded-full bg-[#4f7134]" /> The first owner-authorized check will appear here.</p>}
         </div>
       </div>
@@ -227,7 +227,7 @@ function PrivateBeta() {
         <div className="bg-[#0b0e0c] p-6 text-[#f3efe6] md:p-10 lg:p-12">
           <p className="text-sm font-semibold text-[#c8ff53]">Included</p>
           <ul className="mt-7 space-y-5">
-            {["1 website", "Daily lead-form check", "Immediate failure emails", "Private evidence and check history"].map((item) => <li key={item} className="flex items-center gap-3 border-b border-white/15 pb-5 text-lg"><Check className="size-5 text-[#c8ff53]" />{item}</li>)}
+            {["1 website", "1 monitored lead form", "1 real check every day", "Failure emails to the owner"].map((item) => <li key={item} className="flex items-center gap-3 border-b border-white/15 pb-5 text-lg"><Check className="size-5 text-[#c8ff53]" />{item}</li>)}
           </ul>
           <Button asChild className="mt-8 h-12 w-full rounded-full bg-[#c8ff53] text-[#111612] hover:bg-[#d6ff7b]"><a href="#check">Start free <ArrowRight /></a></Button>
         </div>

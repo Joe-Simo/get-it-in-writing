@@ -7,14 +7,6 @@ export default defineConfig({
   reporter: "line",
   use: {
     baseURL: "http://127.0.0.1:4173",
-    launchOptions: {
-      args: [
-        "--enable-unsafe-webgpu",
-        "--use-angle=metal",
-        "--enable-dawn-features=allow_unsafe_apis",
-        "--disable-gpu-sandbox",
-      ],
-    },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

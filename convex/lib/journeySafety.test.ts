@@ -35,7 +35,7 @@ describe("customer journey safety", () => {
     expect(() => boundedPlainText("x".repeat(41), "Name", 40)).toThrow();
   });
 
-  it("matches inbox evidence without storing a mailbox address", () => {
+  it("matches an inbox confirmation without storing a mailbox address", () => {
     expect(senderDomain("Support <hello@example.com>")).toBe("example.com");
     expect(containsCorrelationToken("Reference SG-A1B2", "sg-a1b2")).toBe(true);
   });

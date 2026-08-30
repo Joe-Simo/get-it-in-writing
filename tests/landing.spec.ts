@@ -10,7 +10,7 @@ test("the landing page sells a customer outcome and remains accessible", async (
     }),
   ).toBeVisible();
   await expect(
-    page.getByText(/submits a clearly labeled test lead/i),
+    page.getByText(/sends one clearly labeled test lead/i),
   ).toBeVisible();
   await expect(page.getByLabel("Website", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Email for the private setup link")).toBeVisible();

@@ -138,7 +138,7 @@ export const discover = action({
         {
           role: "system",
           content:
-            "You identify real public lead forms for a business owner. Return only contact, lead, demo-request, and quote-request forms visibly supported by the supplied page and links. Never suggest payments, purchases, logins, account creation, medical or financial forms, job applications, legal filings, captcha bypass, or anything requiring sensitive personal data. Prefer the one form closest to new revenue. Use exact public URLs from the evidence. Do not claim a confirmation email unless the page promises or strongly signals it; when uncertain, set the boolean false. Set expectsHumanReply to false. expectedSenderDomain should be a plausible visible email domain only when supported; otherwise null. Describe the form and value in plain business language. Never use the terms customer journey, handoff, observability, agent, workflow, or incident.",
+            "You identify real public lead forms for a business owner. Return only contact, lead, demo-request, and quote-request forms visibly supported by the supplied page and links. Never suggest payments, purchases, logins, account creation, medical or financial forms, job applications, legal filings, captcha bypass, or anything requiring sensitive personal data. Prefer the one form closest to new revenue. Use exact public URLs from the evidence. Do not claim a confirmation email unless the page promises or strongly signals it; when uncertain, set the boolean false. Set expectsHumanReply to false. Use expectedReplyMinutes for the confirmation-email wait window, normally 30 to 120 minutes based on the site's visible promise. expectedSenderDomain should be a plausible visible email domain only when supported; otherwise null. Describe the form and value in plain business language. Never use the terms customer journey, handoff, observability, agent, workflow, or incident.",
         },
         {
           role: "user",
@@ -229,6 +229,10 @@ function senderDomain(sender: string) {
   return match?.[1]?.replace(/[^a-z0-9.-]/g, "").slice(0, 253) ?? "agentmail.to";
 }
 
+function matchesExpectedSender(actual: string, expected: string) {
+  return actual === expected || actual.endsWith(`.${expected}`);
+}
+
 export const reconcileAgentMail = internalAction({
   args: {},
   returns: v.number(),
@@ -237,28 +241,45 @@ export const reconcileAgentMail = internalAction({
     if (!apiKey) return 0;
     const expectations = await ctx.runQuery(
       internal.journeys.listWaitingEmailExpectations,
-      {},
+      { now: Date.now() },
     );
     const client = new AgentMailClient({ apiKey });
     let recorded = 0;
     for (const expectation of expectations) {
       try {
-        const result = await client.inboxes.messages.search(expectation.inboxId, {
+        const tokenResult = await client.inboxes.messages.search(expectation.inboxId, {
           q: expectation.correlationToken,
           limit: 10,
           after: new Date(expectation.createdAt - 60_000),
         });
-        const observed = result.messages.find(
-          (message) =>
-            message.labels.includes("received") ||
-            (expectation.expectedKind === "confirmation" &&
-              message.labels.includes("sent") &&
-              message.to.some((recipient) =>
-                recipient
-                  .toLowerCase()
-                  .includes(expectation.inboxId.toLowerCase()),
-              )),
+        const domainResult = expectation.expectedSenderDomain
+          ? await client.inboxes.messages.list(expectation.inboxId, {
+              from: [expectation.expectedSenderDomain],
+              limit: 20,
+              after: new Date(expectation.createdAt - 60_000),
+              before: new Date(expectation.deadlineAt + 60_000),
+            })
+          : { messages: [] };
+        const tokenMatches = new Set(
+          tokenResult.messages.map((message) => message.messageId),
         );
+        const candidates = [
+          ...tokenResult.messages,
+          ...domainResult.messages.filter(
+            (message) => !tokenMatches.has(message.messageId),
+          ),
+        ];
+        const observed = candidates.find((message) => {
+          if (!message.labels.includes("received")) return false;
+          if (tokenMatches.has(message.messageId)) return true;
+          return (
+            expectation.expectedSenderDomain !== undefined &&
+            matchesExpectedSender(
+              senderDomain(message.from),
+              expectation.expectedSenderDomain,
+            )
+          );
+        });
         if (observed === undefined) continue;
         const accepted = await ctx.runMutation(
           internal.journeys.recordEmailReceived,
@@ -267,9 +288,9 @@ export const reconcileAgentMail = internalAction({
             messageId: observed.messageId,
             senderDomain: senderDomain(observed.from),
             evidenceExcerpt:
-              observed.labels.includes("received")
-                ? "AgentMail received the message carrying this run's private correlation reference."
-                : "AgentMail recorded the confirmation sent to the test-customer address with this run's private correlation reference.",
+              expectation.expectedKind === "confirmation"
+                ? "The expected confirmation email arrived in the private test inbox."
+                : "The expected follow-up email arrived in the private test inbox.",
           },
         );
         if (accepted) recorded += 1;
@@ -312,9 +333,9 @@ export const executeRun = internalAction({
       const before = await firecrawlScrape(firecrawlKey, journey.startUrl);
       scrapeId = before.metadata?.scrapeId;
       if (!scrapeId) {
-        await ctx.runMutation(internal.journeys.recordBrowserResult, {
-          runId: args.runId,
-          success: false,
+          await ctx.runMutation(internal.journeys.recordBrowserResult, {
+            runId: args.runId,
+            outcome: "failed",
           summary: "The public page could not be opened in an interactive browser session.",
           failureKind: "website",
         });
@@ -346,7 +367,7 @@ export const executeRun = internalAction({
           body: JSON.stringify({
             prompt,
             timeout: 180,
-            origin: "signal-garden-customer-journey",
+            origin: "signal-garden-lead-form-check",
           }),
         },
       );
@@ -386,11 +407,12 @@ export const executeRun = internalAction({
       if (!evaluation) throw new Error("The lead-form evidence could not be evaluated");
       await ctx.runMutation(internal.journeys.recordBrowserResult, {
         runId: args.runId,
-        success: evaluation.outcome === "submitted",
+        outcome: evaluation.outcome,
         summary: evaluation.summary.slice(0, 600),
         scrapeId,
+        ...(evaluation.outcome === "submitted" ? { inboxId } : {}),
         ...(evaluation.outcome === "submitted"
-          ? { inboxId }
+          ? {}
           : { failureKind: evaluation.failureKind }),
       });
     } catch (error) {
@@ -422,7 +444,9 @@ export const runDue = internalAction({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
-    const journeyIds = await ctx.runQuery(internal.journeys.listDue, {});
+    const journeyIds = await ctx.runQuery(internal.journeys.listDue, {
+      now: Date.now(),
+    });
     let started = 0;
     for (const journeyId of journeyIds) {
       try {

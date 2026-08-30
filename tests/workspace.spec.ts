@@ -14,11 +14,11 @@ test("a new owner reaches lead-form onboarding without submitting an external fo
   await page.getByRole("button", { name: /create private workspace/i }).click();
 
   await expect(
-    page.getByRole("heading", { name: /which lead form should we protect first/i }),
+    page.getByRole("heading", { name: /which lead form should we protect/i }),
   ).toBeVisible();
   await expect(page.getByLabel("Business name")).toBeVisible();
   await expect(page.getByLabel("Public website")).toBeVisible();
-  await expect(page.getByText(/discovery reads public pages only/i)).toBeVisible();
+  await expect(page.getByText(/this step only reads public pages/i)).toBeVisible();
 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);

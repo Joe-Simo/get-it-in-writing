@@ -3,62 +3,8 @@ import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import { containsCorrelationToken, senderDomain } from "./lib/journeySafety";
 
-export const acceptFirecrawl = internalMutation({
-  args: { deliveryId: v.string(), crawlJobId: v.string() },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const prior = await ctx.db
-      .query("webhookReceipts")
-      .withIndex("by_provider_and_deliveryId", (q) =>
-        q.eq("provider", "firecrawl").eq("deliveryId", args.deliveryId),
-      )
-      .unique();
-    if (prior !== null) return false;
-    const seed = await ctx.db
-      .query("missionSeeds")
-      .withIndex("by_crawlJobId", (q) => q.eq("crawlJobId", args.crawlJobId))
-      .unique();
-    if (seed === null || seed.status !== "crawling") return false;
-    const mission = await ctx.db.get("missions", seed.missionId);
-    if (
-      mission === null ||
-      !["crawling", "extracting"].includes(mission.status)
-    )
-      return false;
-    await ctx.db.insert("webhookReceipts", {
-      provider: "firecrawl",
-      deliveryId: args.deliveryId,
-      status: "accepted",
-      receivedAt: Date.now(),
-    });
-    await ctx.db.patch("missionSeeds", seed._id, { status: "processing" });
-    await ctx.scheduler.runAfter(0, internal.pipelineActions.processCrawlJob, {
-      missionId: seed.missionId,
-      seedId: seed._id,
-      crawlJobId: args.crawlJobId,
-    });
-    return true;
-  },
-});
-
-function normalizeAddress(value: string) {
-  const match = value.match(/<([^>]+)>/);
-  return (match?.[1] ?? value).trim().toLowerCase();
-}
-
-function classifyIntent(
-  body: string,
-): "comment" | "question" | "refresh_request" | "unrecognized" {
-  const normalized = body.toLowerCase();
-  if (/\b(refresh|rerun|re-run|crawl|expand|more sources)\b/.test(normalized))
-    return "refresh_request";
-  if (
-    normalized.includes("?") ||
-    /^(how|why|what|when|where|who|can|could|would)\b/.test(normalized.trim())
-  )
-    return "question";
-  if (normalized.trim().length >= 12) return "comment";
-  return "unrecognized";
+function matchesExpectedSender(actual: string, expected: string) {
+  return actual === expected || actual.endsWith(`.${expected}`);
 }
 
 export const acceptAgentMail = internalMutation({
@@ -81,64 +27,10 @@ export const acceptAgentMail = internalMutation({
       )
       .unique();
     if (prior !== null) return false;
-    const delivery = await ctx.db
-      .query("emailDeliveries")
-      .withIndex("by_threadId", (q) => q.eq("threadId", args.threadId))
-      .unique();
-    if (
-      delivery !== null &&
-      delivery.inboxId === args.inboxId &&
-      normalizeAddress(args.sender) === delivery.recipientEmail.toLowerCase()
-    ) {
-      const duplicateMessage = await ctx.db
-        .query("inboundReplies")
-        .withIndex("by_messageId", (q) => q.eq("messageId", args.messageId))
-        .unique();
-      if (duplicateMessage !== null) return false;
-      await ctx.db.insert("webhookReceipts", {
-        provider: "agentmail",
-        deliveryId: args.deliveryId,
-        status: "accepted",
-        receivedAt: Date.now(),
-      });
-      await ctx.db.insert("inboundReplies", {
-        deliveryId: delivery._id,
-        missionId: delivery.missionId,
-        messageId: args.messageId,
-        senderEmail: normalizeAddress(args.sender),
-        intent: classifyIntent(args.body),
-        body: args.body,
-        status: "pending",
-        receivedAt: Date.now(),
-      });
-      await ctx.db.insert("missionEvents", {
-        missionId: delivery.missionId,
-        type: "email",
-        label: "Verified email reply received",
-        detail:
-          "Pending review in Signal Garden; no crawl was started automatically.",
-        createdAt: Date.now(),
-      });
-      if (delivery.purpose === "impact_followup") {
-        const threads = await ctx.db
-          .query("outreachThreads")
-          .withIndex("by_missionId", (q) => q.eq("missionId", delivery.missionId))
-          .take(100);
-        const outreach = threads.find(
-          (thread) => thread.deliveryId === delivery._id,
-        );
-        if (outreach !== undefined) {
-          await ctx.db.patch("outreachThreads", outreach._id, {
-            status: "replied",
-            updatedAt: Date.now(),
-          });
-        }
-      }
-      return true;
-    }
 
     const domain = senderDomain(args.sender);
     const content = `${args.subject}\n${args.body}`;
+    const now = Date.now();
     const waiting = await ctx.db
       .query("journeyEmailExpectations")
       .withIndex("by_inboxId_and_status", (q) =>
@@ -148,28 +40,27 @@ export const acceptAgentMail = internalMutation({
       .take(20);
     const expectation = waiting.find(
       (candidate) =>
-        candidate.deadlineAt >= Date.now() &&
+        candidate.deadlineAt >= now &&
         (containsCorrelationToken(content, candidate.correlationToken) ||
           (candidate.expectedSenderDomain !== undefined &&
-            candidate.expectedSenderDomain === domain)),
+            matchesExpectedSender(domain, candidate.expectedSenderDomain))),
     );
     if (expectation === undefined) return false;
+
     await ctx.db.insert("webhookReceipts", {
       provider: "agentmail",
       deliveryId: args.deliveryId,
       status: "accepted",
-      receivedAt: Date.now(),
+      receivedAt: now,
     });
-    const evidenceExcerpt = (args.subject || "Customer email received")
-      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email removed]")
-      .replace(new RegExp(expectation.correlationToken, "gi"), "[reference removed]")
-      .replace(/\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[phone removed]")
-      .slice(0, 500);
     await ctx.scheduler.runAfter(0, internal.journeys.recordEmailReceived, {
       expectationId: expectation._id,
       messageId: args.messageId,
       senderDomain: domain,
-      evidenceExcerpt,
+      evidenceExcerpt:
+        expectation.expectedKind === "confirmation"
+          ? "The expected confirmation email arrived in the private test inbox."
+          : "The expected follow-up email arrived in the private test inbox.",
     });
     return true;
   },
