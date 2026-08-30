@@ -1,7 +1,8 @@
 import { v } from "convex/values";
+import { vResultValidator, vWorkflowId } from "@convex-dev/workflow";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import { firecrawlRetryDelayMs } from "./lib/firecrawlRetry";
 import { requireMissionMember } from "./model/auth";
 import { missionWorkflowManager } from "./workflowManager";
 
@@ -22,27 +23,39 @@ export const missionWorkflow = missionWorkflowManager
   })
   .handler(async (step, args): Promise<null> => {
     const seeds = await step.runQuery(internal.pipeline.getMissionSeeds, args);
-    await Promise.all(
-      seeds.map(
-        (seed: {
-          _id: Id<"missionSeeds">;
-          url: string;
-          pageLimit: number;
-          depth: number;
-        }) =>
-          step.runAction(
-            internal.pipelineActions.submitCrawl,
-            {
-              missionId: args.missionId,
-              seedId: seed._id,
-              url: seed.url,
-              pageLimit: seed.pageLimit,
-              depth: seed.depth,
-            },
-            { retry: true },
-          ),
-      ),
-    );
+    for (const seed of seeds) {
+      let accepted = false;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const result = await step.runAction(
+          internal.pipelineActions.submitCrawl,
+          {
+            missionId: args.missionId,
+            seedId: seed._id,
+            url: seed.url,
+            pageLimit: seed.pageLimit,
+            depth: seed.depth,
+          },
+          { retry: false },
+        );
+        if (result.kind === "halted") return null;
+        if (result.kind === "accepted") {
+          accepted = true;
+          break;
+        }
+        if (attempt === 7) break;
+        const exponentialDelay = firecrawlRetryDelayMs(
+          429,
+          null,
+          attempt,
+        );
+        await step.sleep(Math.max(result.retryAfterMs, exponentialDelay ?? 0));
+      }
+      if (!accepted) {
+        throw new Error(
+          "Firecrawl remained rate-limited after bounded retries",
+        );
+      }
+    }
     return null;
   });
 
@@ -67,6 +80,7 @@ export const start = mutation({
       seeds.map((seed) =>
         ctx.db.patch("missionSeeds", seed._id, {
           status: "queued",
+          submissionKey: undefined,
           crawlJobId: undefined,
           error: undefined,
         }),
@@ -76,7 +90,11 @@ export const start = mutation({
       ctx,
       internal.pipeline.missionWorkflow,
       args,
-      { startAsync: true },
+      {
+        startAsync: true,
+        onComplete: internal.pipeline.handleWorkflowComplete,
+        context: { missionId: args.missionId },
+      },
     );
     const now = Date.now();
     await ctx.db.patch("missions", args.missionId, {
@@ -119,6 +137,57 @@ export const getMissionSeeds = internalQuery({
       pageLimit: seed.pageLimit,
       depth: mission.depth,
     }));
+  },
+});
+
+export const handleWorkflowComplete = internalMutation({
+  args: {
+    workflowId: vWorkflowId,
+    result: vResultValidator,
+    context: v.object({ missionId: v.id("missions") }),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (args.result.kind !== "failed") return null;
+    const mission = await ctx.db.get("missions", args.context.missionId);
+    if (
+      mission === null ||
+      mission.workflowId !== String(args.workflowId) ||
+      ["ready", "failed", "cancelled"].includes(mission.status)
+    ) {
+      return null;
+    }
+    const seeds = await ctx.db
+      .query("missionSeeds")
+      .withIndex("by_missionId", (q) =>
+        q.eq("missionId", args.context.missionId),
+      )
+      .take(8);
+    await Promise.all(
+      seeds
+        .filter((seed) => seed.status === "queued")
+        .map((seed) =>
+          ctx.db.patch("missionSeeds", seed._id, {
+            status: "failed",
+            error: "The research provider did not accept this crawl in time.",
+          }),
+        ),
+    );
+    const now = Date.now();
+    await ctx.db.patch("missions", args.context.missionId, {
+      status: "failed",
+      error:
+        "The research provider could not start every bounded crawl after retrying.",
+      updatedAt: now,
+    });
+    await ctx.db.insert("missionEvents", {
+      missionId: args.context.missionId,
+      type: "crawl",
+      label: "Crawl launch stopped safely",
+      detail: "The provider limit persisted after bounded backoff retries.",
+      createdAt: now,
+    });
+    return null;
   },
 });
 

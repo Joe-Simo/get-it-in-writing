@@ -78,6 +78,7 @@ export default defineSchema({
     url: v.string(),
     pageLimit: v.number(),
     status: seedStatus,
+    submissionKey: v.optional(v.string()),
     crawlJobId: v.optional(v.string()),
     error: v.optional(v.string()),
   })

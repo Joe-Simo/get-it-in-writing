@@ -13,6 +13,7 @@ import type * as emailActions from "../emailActions.js";
 import type * as emails from "../emails.js";
 import type * as gardens from "../gardens.js";
 import type * as http from "../http.js";
+import type * as lib_firecrawlRetry from "../lib/firecrawlRetry.js";
 import type * as lib_webhookAuth from "../lib/webhookAuth.js";
 import type * as missions from "../missions.js";
 import type * as model_auth from "../model/auth.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   emails: typeof emails;
   gardens: typeof gardens;
   http: typeof http;
+  "lib/firecrawlRetry": typeof lib_firecrawlRetry;
   "lib/webhookAuth": typeof lib_webhookAuth;
   missions: typeof missions;
   "model/auth": typeof model_auth;

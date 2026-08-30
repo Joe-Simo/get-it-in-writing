@@ -4,6 +4,7 @@
 - **Event:** Convex All Gas Hackathon
 - **What it does:** Runs bounded, collaborative research missions and turns source-linked claims into inspectable briefs.
 - **Live app:** https://resilient-salamander-937.convex.site
+- **Public garden:** https://resilient-salamander-937.convex.site/garden/how-should-small-teams-build-inspect-ef1e588f
 - **Repo:** https://github.com/Joe-Simo/signal-garden-all-gas
 - **Frontend:** Convex static hosting
 - **Convex deployment:** https://resilient-salamander-937.convex.cloud
@@ -12,7 +13,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna, gpt-5.6-terra
 - **Started:** 2026-08-29T15:19:35Z
-- **Last updated:** 2026-08-29T23:17:01Z
+- **Last updated:** 2026-08-30T01:30:58Z
 
 ## Log
 
@@ -59,3 +60,17 @@ workspace route loads, and found no application-originated console errors.
 Scoped all required provider configuration to the production deployment and
 verified its AgentMail route rejects unsigned requests and accepts a correctly
 signed synthetic delivery that cannot match or modify a real email thread.
+Moved the AgentMail `message.received` webhook from the development route to
+the dedicated production route and repeated the signed and unsigned delivery
+checks. Hardened Firecrawl launch behavior to honor provider retry windows,
+submit bounded seeds sequentially, and terminate failed workflows truthfully
+instead of leaving missions in progress. Added focused retry and terminal-state
+tests, dry-ran the deployment against the dedicated Signal Garden production
+project, and deployed only there. Ran a real production mission across the
+Convex, OpenAI, and Firecrawl documentation: all three seeds reached a terminal
+state, two sources yielded 21 inspectable claims, and the workflow produced a
+cited brief. Published and independently verified its read-only public garden,
+including the server-side exclusion of identities, email metadata, private
+notes, and webhook records. Rendered and visually reviewed an 81-second,
+1920-by-1080 submission film from the verified production journey; public video
+publishing remains pending.

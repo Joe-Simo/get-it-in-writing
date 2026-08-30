@@ -7,6 +7,7 @@ import { z } from "zod";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
+import { firecrawlRetryDelayMs } from "./lib/firecrawlRetry";
 import type { StoredSource } from "./pipeline";
 
 const crawlResponse = z.object({ success: z.boolean(), id: z.string() });
@@ -64,12 +65,18 @@ export const submitCrawl = internalAction({
     pageLimit: v.number(),
     depth: v.number(),
   },
-  returns: v.string(),
+  returns: v.union(
+    v.object({ kind: v.literal("accepted"), crawlJobId: v.string() }),
+    v.object({ kind: v.literal("retry"), retryAfterMs: v.number() }),
+    v.object({ kind: v.literal("halted") }),
+  ),
   handler: async (ctx, args) => {
     const mission = await ctx.runQuery(internal.pipeline.getSynthesisInput, {
       missionId: args.missionId,
     });
-    if (mission.mission.status === "cancelled") return "cancelled";
+    if (["cancelled", "failed", "ready"].includes(mission.mission.status)) {
+      return { kind: "halted" as const };
+    }
     const apiKey = requiredEnv("FIRECRAWL_API_KEY");
     const webhookSecret = requiredEnv("FIRECRAWL_WEBHOOK_SECRET");
     const siteUrl = requiredEnv("CONVEX_SITE_URL");
@@ -101,14 +108,24 @@ export const submitCrawl = internalAction({
         },
       }),
     });
-    if (!response.ok)
+    if (!response.ok) {
+      const retryAfterMs = firecrawlRetryDelayMs(
+        response.status,
+        response.headers.get("retry-after"),
+        0,
+      );
+      if (retryAfterMs !== null) {
+        return { kind: "retry" as const, retryAfterMs };
+      }
       throw new Error(`Firecrawl rejected the seed (${response.status})`);
+    }
     const parsed = crawlResponse.parse(await response.json());
+    if (!parsed.success) throw new Error("Firecrawl rejected the crawl request");
     await ctx.runMutation(internal.pipeline.markSeedStarted, {
       seedId: args.seedId,
       crawlJobId: parsed.id,
     });
-    return parsed.id;
+    return { kind: "accepted" as const, crawlJobId: parsed.id };
   },
 });
 

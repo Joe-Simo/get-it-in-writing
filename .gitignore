@@ -16,6 +16,7 @@ lerna-debug.log*
 .firecrawl/
 test-results
 playwright-report
+video/out/
 dist
 dist-ssr
 *.local

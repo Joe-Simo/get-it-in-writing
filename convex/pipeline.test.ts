@@ -2,6 +2,7 @@
 
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
+import type { WorkflowId } from "@convex-dev/workflow";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 
@@ -223,4 +224,68 @@ test("partial evidence cannot revive a mission after another seed fails", async 
   expect(result.mission?.status).toBe("failed");
   expect(result.mission?.sourceCount).toBe(1);
   expect(result.seed?.status).toBe("complete");
+});
+
+test("a failed workflow leaves the mission in a truthful terminal state", async () => {
+  const t = convexTest(schema, modules);
+  const workflowId = "workflow-terminal" as WorkflowId;
+  const { missionId, queuedSeedId, completeSeedId } = await t.run(async (ctx) => {
+    const userId = await ctx.db.insert("users", {
+      email: "terminal-workflow@example.invalid",
+    });
+    const teamId = await ctx.db.insert("teams", {
+      name: "Terminal workflow",
+      slug: "terminal-workflow",
+      ownerId: userId,
+      createdAt: 1,
+    });
+    const missionId = await ctx.db.insert("missions", {
+      teamId,
+      createdBy: userId,
+      question: "Does a provider submission failure terminate cleanly?",
+      status: "extracting",
+      pageBudget: 4,
+      depth: 0,
+      pagesProcessed: 1,
+      sourceCount: 1,
+      claimCount: 2,
+      workflowId: String(workflowId),
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const queuedSeedId = await ctx.db.insert("missionSeeds", {
+      missionId,
+      url: "https://queued.example.invalid",
+      pageLimit: 2,
+      status: "queued",
+    });
+    const completeSeedId = await ctx.db.insert("missionSeeds", {
+      missionId,
+      url: "https://complete.example.invalid",
+      pageLimit: 2,
+      status: "complete",
+      crawlJobId: "complete-job",
+    });
+    return { missionId, queuedSeedId, completeSeedId };
+  });
+
+  await t.mutation(internal.pipeline.handleWorkflowComplete, {
+    workflowId,
+    result: { kind: "failed", error: "provider unavailable" },
+    context: { missionId },
+  });
+
+  const result = await t.run(async (ctx) => ({
+    mission: await ctx.db.get("missions", missionId),
+    queuedSeed: await ctx.db.get("missionSeeds", queuedSeedId),
+    completeSeed: await ctx.db.get("missionSeeds", completeSeedId),
+    events: await ctx.db
+      .query("missionEvents")
+      .withIndex("by_missionId", (q) => q.eq("missionId", missionId))
+      .collect(),
+  }));
+  expect(result.mission?.status).toBe("failed");
+  expect(result.queuedSeed?.status).toBe("failed");
+  expect(result.completeSeed?.status).toBe("complete");
+  expect(result.events.at(-1)?.label).toBe("Crawl launch stopped safely");
 });
