@@ -13,7 +13,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna, gpt-5.6-terra
 - **Started:** 2026-08-29T15:19:35Z
-- **Last updated:** 2026-08-30T01:30:58Z
+- **Last updated:** 2026-08-30T01:46:01Z
 
 ## Log
 
@@ -71,6 +71,4 @@ Convex, OpenAI, and Firecrawl documentation: all three seeds reached a terminal
 state, two sources yielded 21 inspectable claims, and the workflow produced a
 cited brief. Published and independently verified its read-only public garden,
 including the server-side exclusion of identities, email metadata, private
-notes, and webhook records. Rendered and visually reviewed an 81-second,
-1920-by-1080 submission film from the verified production journey; public video
-publishing remains pending.
+notes, and webhook records.
