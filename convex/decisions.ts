@@ -56,6 +56,85 @@ async function requireOwnedDecision(
   return decision;
 }
 
+async function deleteDecisionGraph(ctx: MutationCtx, decisionId: Id<"decisions">) {
+  const proofCards = await ctx.db
+    .query("proofCards")
+    .withIndex("by_decisionId", (q) => q.eq("decisionId", decisionId))
+    .take(20);
+  for (const card of proofCards) {
+    const items = await ctx.db
+      .query("proofItems")
+      .withIndex("by_proofCardId_and_order", (q) => q.eq("proofCardId", card._id))
+      .take(50);
+    for (const item of items) await ctx.db.delete("proofItems", item._id);
+    await ctx.db.delete("proofCards", card._id);
+  }
+
+  const requests = await ctx.db
+    .query("confirmationRequests")
+    .withIndex("by_decisionId_and_createdAt", (q) => q.eq("decisionId", decisionId))
+    .take(20);
+  for (const request of requests) {
+    const replies = await ctx.db
+      .query("confirmationReplies")
+      .withIndex("by_requestId_and_receivedAt", (q) => q.eq("requestId", request._id))
+      .take(50);
+    for (const reply of replies) {
+      const outcomes = await ctx.db
+        .query("confirmationOutcomes")
+        .withIndex("by_replyId", (q) => q.eq("replyId", reply._id))
+        .take(50);
+      for (const outcome of outcomes) {
+        await ctx.db.delete("confirmationOutcomes", outcome._id);
+      }
+      await ctx.db.delete("confirmationReplies", reply._id);
+    }
+    await ctx.db.delete("confirmationRequests", request._id);
+  }
+
+  const assessments = await ctx.db
+    .query("claimAssessments")
+    .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decisionId))
+    .take(100);
+  for (const assessment of assessments) {
+    const evidence = await ctx.db
+      .query("claimEvidence")
+      .withIndex("by_assessmentId", (q) => q.eq("assessmentId", assessment._id))
+      .take(100);
+    for (const item of evidence) await ctx.db.delete("claimEvidence", item._id);
+    await ctx.db.delete("claimAssessments", assessment._id);
+  }
+
+  const requirements = await ctx.db
+    .query("decisionRequirements")
+    .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decisionId))
+    .take(50);
+  for (const requirement of requirements) {
+    const ambiguities = await ctx.db
+      .query("decisionAmbiguities")
+      .withIndex("by_requirementId", (q) => q.eq("requirementId", requirement._id))
+      .take(50);
+    for (const ambiguity of ambiguities) {
+      await ctx.db.delete("decisionAmbiguities", ambiguity._id);
+    }
+    await ctx.db.delete("decisionRequirements", requirement._id);
+  }
+
+  const [sources, contacts, changes, monitors, events] = await Promise.all([
+    ctx.db.query("sourceDocuments").withIndex("by_decisionId_and_url", (q) => q.eq("decisionId", decisionId)).take(100),
+    ctx.db.query("officialContacts").withIndex("by_decisionId_and_createdAt", (q) => q.eq("decisionId", decisionId)).take(50),
+    ctx.db.query("sourceChanges").withIndex("by_decisionId_and_detectedAt", (q) => q.eq("decisionId", decisionId)).take(50),
+    ctx.db.query("changeMonitors").withIndex("by_decisionId", (q) => q.eq("decisionId", decisionId)).take(10),
+    ctx.db.query("decisionEvents").withIndex("by_decisionId_and_occurredAt", (q) => q.eq("decisionId", decisionId)).take(200),
+  ]);
+  for (const row of sources) await ctx.db.delete("sourceDocuments", row._id);
+  for (const row of contacts) await ctx.db.delete("officialContacts", row._id);
+  for (const row of changes) await ctx.db.delete("sourceChanges", row._id);
+  for (const row of monitors) await ctx.db.delete("changeMonitors", row._id);
+  for (const row of events) await ctx.db.delete("decisionEvents", row._id);
+  await ctx.db.delete("decisions", decisionId);
+}
+
 export const listMine = query({
   args: {},
   returns: v.array(
@@ -215,6 +294,16 @@ export const getDetail = query({
       sourceChanges,
       events,
     };
+  },
+});
+
+export const remove = mutation({
+  args: { decisionId: v.id("decisions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireOwnedDecision(ctx, args.decisionId);
+    await deleteDecisionGraph(ctx, args.decisionId);
+    return null;
   },
 });
 

@@ -19,8 +19,9 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { StatusStamp } from "@/backend/DashboardPage";
 import { Badge } from "@/components/ui/badge";
@@ -52,16 +53,19 @@ type Evidence = {
 
 export default function DecisionPage() {
   const { decisionId } = useParams();
+  const navigate = useNavigate();
   const queryArgs = decisionId ? { decisionId: decisionId as Id<"decisions"> } : "skip";
   const detail = useQuery(api.decisions.getDetail, queryArgs);
   const progress = useQuery(api.research.progress, queryArgs);
   const retryResearch = useMutation(api.decisions.retryResearch);
   const requestCheck = useMutation(api.changes.requestCheck);
   const acknowledgeChange = useMutation(api.changes.acknowledge);
+  const removeDecision = useMutation(api.decisions.remove);
   const request = detail?.requests[0];
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const researchActive = detail
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const researchActive = detail && !detail.decision.operationalFailure
     ? ["scoping", "researching", "analyzing", "confirmation_available", "drafting_confirmation"].includes(detail.decision.status)
     : false;
   const evidenceByAssessment = useMemo(() => {
@@ -111,6 +115,18 @@ export default function DecisionPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The change could not be acknowledged");
     } finally {
+      setPending(null);
+    }
+  }
+
+  async function deleteCase() {
+    setPending("delete");
+    setError("");
+    try {
+      await removeDecision({ decisionId: activeDecisionId });
+      void navigate("/app", { replace: true });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The private case could not be deleted");
       setPending(null);
     }
   }
@@ -174,6 +190,23 @@ export default function DecisionPage() {
 
       {detail.replies.length > 0 && <ReplyPanel reply={detail.replies[0]} />}
       {detail.proofCard && <ProofCard card={detail.proofCard} items={detail.proofItems} followUpAlreadyPrepared={detail.requests.some((item) => item.followUpCount >= 1)} checking={pending === "check"} onCheck={() => void checkSources()} />}
+
+      <section className="case-delete" aria-live="polite">
+        <div>
+          <strong>Delete this private case</strong>
+          <p>Removes its requirements, sources, messages, and Proof Card from this wallet. Previously sent email cannot be recalled.</p>
+        </div>
+        {deleteArmed ? (
+          <div className="case-delete-confirm">
+            <Button variant="ghost" disabled={pending === "delete"} onClick={() => setDeleteArmed(false)}>Cancel</Button>
+            <Button disabled={pending === "delete"} className="case-delete-final" onClick={() => void deleteCase()}>
+              {pending === "delete" ? <LoaderCircle className="animate-spin" /> : <Trash2 />} Delete permanently
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outline" onClick={() => setDeleteArmed(true)}><Trash2 /> Delete case</Button>
+        )}
+      </section>
     </div>
   );
 }

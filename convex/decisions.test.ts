@@ -47,6 +47,93 @@ test("a decision is private and starts bounded research without contacting anyon
   ).resolves.toBeNull();
 });
 
+test("an owner can permanently remove a private case and its stored graph", async () => {
+  const { t, ownerId, otherId } = await createUserFixture();
+  const fixture = await t.run(async (ctx) => {
+    const decisionId = await ctx.db.insert("decisions", {
+      ownerId,
+      title: "Rejected case",
+      sourceUrl: "https://example.com/policy",
+      sourceHost: "example.com",
+      requirementText: "A requirement outside this case",
+      category: "other",
+      status: "scoping",
+      operationalFailure: "unsupported_decision",
+      operationalMessage: "This case is outside the supported scope.",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const requirementId = await ctx.db.insert("decisionRequirements", {
+      decisionId,
+      ownerId,
+      text: "A requirement outside this case",
+      order: 0,
+      createdAt: 1,
+    });
+    const assessmentId = await ctx.db.insert("claimAssessments", {
+      decisionId,
+      requirementId,
+      status: "not_established",
+      statement: "Not established",
+      reason: "No supported evidence.",
+      order: 0,
+      createdAt: 1,
+    });
+    await ctx.db.insert("claimEvidence", {
+      decisionId,
+      assessmentId,
+      sourceUrl: "https://example.com/policy",
+      sourceExcerpt: "Example passage",
+      supports: false,
+      observedAt: 1,
+    });
+    await ctx.db.insert("sourceDocuments", {
+      decisionId,
+      crawlId: "crawl_delete",
+      url: "https://example.com/policy",
+      contentHash: "d".repeat(64),
+      excerpt: "Example passage",
+      capturedAt: 1,
+    });
+    await ctx.db.insert("decisionEvents", {
+      decisionId,
+      toStatus: "scoping",
+      label: "Decision created",
+      occurredAt: 1,
+    });
+    return { decisionId };
+  });
+
+  await expect(
+    t.withIdentity({ subject: otherId }).mutation(api.decisions.remove, {
+      decisionId: fixture.decisionId,
+    }),
+  ).rejects.toThrow("private");
+
+  await t.withIdentity({ subject: ownerId }).mutation(api.decisions.remove, {
+    decisionId: fixture.decisionId,
+  });
+  await expect(
+    t.withIdentity({ subject: ownerId }).query(api.decisions.getDetail, {
+      decisionId: fixture.decisionId,
+    }),
+  ).resolves.toBeNull();
+  const relatedRows = await t.run(async (ctx) => ({
+    requirements: await ctx.db.query("decisionRequirements").collect(),
+    assessments: await ctx.db.query("claimAssessments").collect(),
+    evidence: await ctx.db.query("claimEvidence").collect(),
+    sources: await ctx.db.query("sourceDocuments").collect(),
+    events: await ctx.db.query("decisionEvents").collect(),
+  }));
+  expect(relatedRows).toEqual({
+    requirements: [],
+    assessments: [],
+    evidence: [],
+    sources: [],
+    events: [],
+  });
+});
+
 test("verified official evidence can create a private source-backed Proof Card", async () => {
   const { t, ownerId } = await createUserFixture();
   const decisionId = await t.run((ctx) =>

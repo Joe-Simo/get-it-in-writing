@@ -249,6 +249,12 @@
 .operational-error > svg { color: #a5281b; }
 .operational-error strong { font-size: .85rem; }
 .operational-error p { margin-top: .25rem; color: rgb(16 21 17 / 62%); font-size: .75rem; }
+.case-delete { display: flex; margin-top: 3rem; padding: 1.1rem 0; align-items: center; justify-content: space-between; gap: 1.5rem; border-top: 1px solid rgb(16 21 17 / 18%); }
+.case-delete strong { font-size: .78rem; letter-spacing: .02em; }
+.case-delete p { max-width: 650px; margin-top: .3rem; color: rgb(16 21 17 / 58%); font-size: .72rem; line-height: 1.5; }
+.case-delete-confirm { display: flex; align-items: center; gap: .5rem; }
+.case-delete-final { border-radius: 0; background: #a5281b; color: white; }
+.case-delete-final:hover { background: #831f16; }
 .exact-requirement { margin-bottom: 1.5rem; padding: clamp(1.5rem, 4vw, 3rem); }
 .exact-requirement::before, .exact-requirement::after { top: 50%; }
 .exact-requirement blockquote { max-width: 930px; margin-top: 2rem; font-family: var(--font-editorial); font-size: clamp(2.4rem, 4.5vw, 4.8rem); font-weight: 470; line-height: .93; letter-spacing: -.045em; }
@@ -507,6 +513,9 @@
   .status-rail li:last-child { border-bottom: 0; }
   .operational-error { grid-template-columns: auto 1fr; }
   .operational-error button { grid-column: 1 / -1; }
+  .case-delete { align-items: stretch; flex-direction: column; }
+  .case-delete > button, .case-delete-confirm { width: 100%; }
+  .case-delete-confirm > button { flex: 1; }
   .proof-card-top { flex-direction: column-reverse; }
   .proof-seal { width: 5rem; height: 5rem; align-self: flex-end; }
   .requirement-stack li { grid-template-columns: 1.7rem minmax(0, 1fr); }
