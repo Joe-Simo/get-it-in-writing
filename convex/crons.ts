@@ -31,4 +31,11 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "retry lead-form alert delivery",
+  { minutes: 5 },
+  internal.alertActions.retryDue,
+  {},
+);
+
 export default crons;

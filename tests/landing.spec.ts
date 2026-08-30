@@ -6,14 +6,14 @@ test("the landing page sells a customer outcome and remains accessible", async (
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: /know when your customer journey breaks/i,
+      name: /we test your lead form every day.*if it breaks, we email you/i,
     }),
   ).toBeVisible();
   await expect(
-    page.getByText(/checks your website like a real customer/i),
+    page.getByText(/submits a clearly labeled test lead/i),
   ).toBeVisible();
-  await expect(page.getByLabel("Business website")).toBeVisible();
-  await expect(page.getByLabel("Work email")).toBeVisible();
+  await expect(page.getByLabel("Website", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Email for the private setup link")).toBeVisible();
 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
@@ -24,8 +24,8 @@ test("the landing page sells a customer outcome and remains accessible", async (
 
 test("the public story stays about the business instead of the implementation stack", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.getByText("Uptime is not the same as a working business.")).toBeVisible();
-  await expect(page.getByText("If a website creates leads, there is a journey worth protecting.")).toBeVisible();
+  await expect(page.getByText("Your website can be online and still lose every lead.")).toBeVisible();
+  await expect(page.getByText("For businesses that depend on website leads.")).toBeVisible();
   const visibleText = await page.locator("body").innerText();
   expect(visibleText).not.toMatch(/Firecrawl|AgentMail|OpenAI|Convex database/i);
 });
@@ -36,9 +36,9 @@ test("the mobile menu and lead form remain operable", async ({ page }, testInfo)
   await page.getByRole("button", { name: "Open menu" }).click();
   await expect(page.getByRole("navigation", { name: "Mobile navigation" })).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.getByLabel("Business website").fill("https://example.com");
-  await page.getByLabel("Work email").fill("owner@example.com");
-  await expect(page.getByRole("button", { name: "Find my customer journey" })).toBeEnabled();
+  await page.getByLabel("Website", { exact: true }).fill("https://example.com");
+  await page.getByLabel("Email for the private setup link").fill("owner@example.com");
+  await expect(page.getByRole("button", { name: "Send me the setup link" })).toBeEnabled();
 });
 
 test("missing public proof fails closed without leaking private data", async ({ page }) => {

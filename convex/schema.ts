@@ -578,6 +578,28 @@ export default defineSchema({
     .index("by_teamId_and_status", ["teamId", "status"])
     .index("by_journeyId_and_status", ["journeyId", "status"])
     .index("by_runId", ["runId"]),
+  journeyAlertDeliveries: defineTable({
+    teamId: v.id("teams"),
+    incidentId: v.optional(v.id("journeyIncidents")),
+    kind: v.union(v.literal("incident"), v.literal("test")),
+    token: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("sending"),
+      v.literal("sent"),
+      v.literal("failed"),
+    ),
+    attemptCount: v.number(),
+    messageId: v.optional(v.string()),
+    failureCode: v.optional(
+      v.union(v.literal("configuration"), v.literal("recipient"), v.literal("delivery")),
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_incidentId", ["incidentId"])
+    .index("by_status_and_updatedAt", ["status", "updatedAt"])
+    .index("by_teamId_and_createdAt", ["teamId", "createdAt"]),
   publicJourneyReports: defineTable({
     slug: v.string(),
     teamId: v.id("teams"),

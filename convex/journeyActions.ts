@@ -102,7 +102,7 @@ async function firecrawlScrape(apiKey: string, url: string) {
     }),
   });
   if (!response.ok) {
-    throw new Error(`Firecrawl could not open the journey (${response.status})`);
+    throw new Error(`The public website could not be opened (${response.status})`);
   }
   return scrapeEnvelope.parse(await response.json()).data;
 }
@@ -129,7 +129,7 @@ export const discover = action({
       100_000,
     );
     if (content.trim().length < 80) {
-      throw new Error("The website did not expose enough public content to map a journey");
+      throw new Error("The website did not expose enough public content to find a lead form");
     }
     const openai = new OpenAI({ apiKey: requiredEnv("OPENAI_API_KEY") });
     const result = await openai.responses.parse({
@@ -138,18 +138,18 @@ export const discover = action({
         {
           role: "system",
           content:
-            "You map real public customer journeys for a business owner. Identify only contact, lead, and quote-request journeys visibly supported by the supplied page and links. Never suggest payments, purchases, logins, account creation, medical or financial forms, job applications, legal filings, captcha bypass, or anything requiring sensitive personal data. Prefer one high-value journey where a lost submission or slow reply costs the business revenue. Use exact public URLs from the evidence. Do not claim a confirmation email or human reply unless the page promises or strongly signals it; when uncertain, set the boolean false. expectedSenderDomain should be a plausible visible email domain only when supported; otherwise null. Keep the business language concrete and nontechnical.",
+            "You identify real public lead forms for a business owner. Return only contact, lead, demo-request, and quote-request forms visibly supported by the supplied page and links. Never suggest payments, purchases, logins, account creation, medical or financial forms, job applications, legal filings, captcha bypass, or anything requiring sensitive personal data. Prefer the one form closest to new revenue. Use exact public URLs from the evidence. Do not claim a confirmation email unless the page promises or strongly signals it; when uncertain, set the boolean false. Set expectsHumanReply to false. expectedSenderDomain should be a plausible visible email domain only when supported; otherwise null. Describe the form and value in plain business language. Never use the terms customer journey, handoff, observability, agent, workflow, or incident.",
         },
         {
           role: "user",
           content: `Website: ${websiteUrl}\nPage title: ${page.metadata?.title ?? "Unknown"}\nDescription: ${page.metadata?.description ?? "None"}\n\nPUBLIC WEBSITE EVIDENCE\n${content}`,
         },
       ],
-      text: { format: zodTextFormat(discoveryOutput, "journey_discovery") },
+      text: { format: zodTextFormat(discoveryOutput, "lead_form_discovery") },
     });
     const parsed = result.output_parsed;
     if (!parsed || parsed.candidates.length === 0) {
-      throw new Error("No safe public lead or contact journey was found on this website");
+      throw new Error("No safe public lead or contact form was found on this website");
     }
     return {
       siteName: parsed.siteName.slice(0, 80),
@@ -307,7 +307,7 @@ export const executeRun = internalAction({
         "lead_form",
         "quote_request",
       ].includes(journey.kind)) {
-        throw new Error("This journey type is review-only and cannot be submitted automatically");
+        throw new Error("This form type cannot be submitted automatically");
       }
       const before = await firecrawlScrape(firecrawlKey, journey.startUrl);
       scrapeId = before.metadata?.scrapeId;
@@ -323,11 +323,11 @@ export const executeRun = internalAction({
       const prompt = [
         "You are Signal Garden QA, a clearly identified test customer acting with the website owner's authorization.",
         `Customer goal: ${journey.goal}`,
-        `Journey reference: ${journey.correlationToken}`,
+        `Check reference: ${journey.correlationToken}`,
         `Use the full name 'Signal Garden QA ${journey.correlationToken}'.`,
         `Use the email address '${inboxId}'.`,
         `For a website or company URL field, use '${new URL(`/`, journey.startUrl).toString()}?signal_garden_test=${journey.correlationToken}'.`,
-        `For a message or notes field, write: 'Authorized customer-journey test. No service is requested. Please keep this reference in confirmation and reply messages: ${journey.correlationToken}.'`,
+        `For a message or notes field, write: 'Authorized lead-form test. No service is requested. Please keep this reference in confirmation messages: ${journey.correlationToken}.'`,
         "Use 202-555-0147 only if a phone number is mandatory. This is a reserved fictional number.",
         "Find and complete only the public contact, lead, or quote-request form that directly supports the stated goal.",
         "Submit exactly once, then report what the page visibly showed after submission.",
@@ -360,7 +360,7 @@ export const executeRun = internalAction({
           (value): value is string => typeof value === "string",
         );
         throw new Error(
-          `The interactive journey could not run (${interactionResponse.status})${reason ? `: ${reason.replace(/[^\x20-\x7E]/g, " ").slice(0, 240)}` : ""}`,
+          `The interactive form check could not run (${interactionResponse.status})${reason ? `: ${reason.replace(/[^\x20-\x7E]/g, " ").slice(0, 240)}` : ""}`,
         );
       }
       const rawEvidence = interactionEvidence(interactionPayload);
@@ -375,7 +375,7 @@ export const executeRun = internalAction({
           },
           {
             role: "user",
-            content: `Journey goal: ${journey.goal}\nJourney kind: ${journey.kind}\n\nBROWSER EVIDENCE\n${rawEvidence}`,
+            content: `Lead-form goal: ${journey.goal}\nForm kind: ${journey.kind}\n\nBROWSER EVIDENCE\n${rawEvidence}`,
           },
         ],
         text: {
@@ -383,7 +383,7 @@ export const executeRun = internalAction({
         },
       });
       const evaluation = evaluationResponse.output_parsed;
-      if (!evaluation) throw new Error("The journey evidence could not be evaluated");
+      if (!evaluation) throw new Error("The lead-form evidence could not be evaluated");
       await ctx.runMutation(internal.journeys.recordBrowserResult, {
         runId: args.runId,
         success: evaluation.outcome === "submitted",
@@ -395,13 +395,13 @@ export const executeRun = internalAction({
       });
     } catch (error) {
       console.error(
-        "Journey provider execution failed",
+        "Lead-form check execution failed",
         error instanceof Error ? error.name : "UnknownError",
       );
       await ctx.runMutation(internal.journeys.recordRunError, {
         runId: args.runId,
         summary:
-          "Signal Garden could not complete the provider-backed check. Review the integration status and run it again.",
+          "Signal Garden could not complete this check. No form result was recorded; run it again.",
       });
     } finally {
       if (scrapeId !== undefined && firecrawlKey !== undefined) {

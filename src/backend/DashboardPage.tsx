@@ -73,7 +73,7 @@ export default function DashboardPage() {
           <CardHeader>
             <Badge variant="outline" className="w-fit rounded-full">Private workspace</Badge>
             <CardTitle className="font-editorial text-5xl font-normal tracking-[-.045em]">Name the business you protect.</CardTitle>
-            <CardDescription>Customer journeys, runs, incidents, and team access stay inside this boundary.</CardDescription>
+            <CardDescription>Lead-form checks, evidence, alerts, and team access stay inside this private workspace.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={(event) => { event.preventDefault(); void createTeam({ name: teamName }); }}>
@@ -105,7 +105,7 @@ function InvitationAcceptance({ token, onComplete }: { token: string; onComplete
   return (
     <main className="grid min-h-screen place-items-center bg-[#0b0e0c] p-6 text-[#f3efe6]">
       <Card className="w-full max-w-lg border-white/20 bg-white/[.03] text-white">
-        <CardHeader><Badge className="w-fit bg-[#c8ff53] text-[#111612]">Private invitation</Badge><CardTitle className="font-editorial text-5xl font-normal tracking-[-.045em]">Join the customer team.</CardTitle><CardDescription className="text-white/55">Your signed-in email must match the invitation.</CardDescription></CardHeader>
+        <CardHeader><Badge className="w-fit bg-[#c8ff53] text-[#111612]">Private invitation</Badge><CardTitle className="font-editorial text-5xl font-normal tracking-[-.045em]">Join this workspace.</CardTitle><CardDescription className="text-white/55">Your signed-in email must match the invitation.</CardDescription></CardHeader>
         <CardContent>
           {error && <p role="alert" className="mb-4 text-sm text-[#ff9b8b]">{error}</p>}
           <Button className="h-12 w-full rounded-full bg-[#c8ff53] text-[#111612]" disabled={pending} onClick={() => { setPending(true); setError(""); void acceptInvitation({ token }).then(onComplete).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Invitation could not be accepted")).finally(() => setPending(false)); }}>{pending ? <LoaderCircle className="animate-spin" /> : <CheckCircle2 />} Accept invitation</Button>
@@ -137,18 +137,18 @@ function TeamDashboard({ teams, team, onTeamChange, onSignOut }: { teams: TeamSu
         ) : (
           <>
             <div className="flex flex-col justify-between gap-7 md:flex-row md:items-end">
-              <div><p className="eyebrow">{business.displayName} · {new URL(business.websiteUrl).hostname}</p><h1 className="mt-4 text-6xl font-semibold tracking-[-.068em] md:text-8xl">Protect the handoff.</h1><p className="mt-5 max-w-xl text-base leading-relaxed text-black/58">See whether customers can complete the journey, receive confirmation, and get the reply your business promises.</p></div>
-              <DiscoveryDialog team={team} initialWebsite={business.websiteUrl} />
+              <div><p className="eyebrow">{business.displayName} · {new URL(business.websiteUrl).hostname}</p><h1 className="mt-4 text-6xl font-semibold tracking-[-.068em] md:text-8xl">Protect your lead forms.</h1><p className="mt-5 max-w-xl text-base leading-relaxed text-black/58">Signal Garden checks the form on schedule and emails the owner when the page, submission, or confirmation fails.</p></div>
+              <div className="flex flex-col items-start gap-3 md:items-end"><AlertTestButton team={team} /><DiscoveryDialog team={team} initialWebsite={business.websiteUrl} /></div>
             </div>
             <div className="mt-10 grid gap-px border border-black/20 bg-black/20 sm:grid-cols-3">
-              <Metric label="Journeys protected" value={journeys.length} icon={Route} />
+              <Metric label="Checks configured" value={journeys.length} icon={Route} />
               <Metric label="Healthy now" value={healthy} icon={CheckCircle2} />
-              <Metric label="Open incidents" value={openIncidents} icon={CircleAlert} alert={openIncidents > 0} />
+              <Metric label="Open failures" value={openIncidents} icon={CircleAlert} alert={openIncidents > 0} />
             </div>
             <div className="mt-12 grid gap-px border border-black/20 bg-black/20 md:grid-cols-2 xl:grid-cols-3">
               {journeys.map((journey, index) => <JourneyCard key={journey._id} journey={journey} index={index} />)}
               {journeys.length === 0 && (
-                <div className="col-span-full grid min-h-72 place-items-center bg-[#f3efe6] p-10 text-center"><div><Radar className="mx-auto size-7 text-black/45" /><h2 className="mt-4 text-2xl font-semibold tracking-[-.04em]">No journey protected yet.</h2><p className="mt-2 text-sm text-black/55">Find the public path closest to a new customer.</p><div className="mt-6"><DiscoveryDialog team={team} initialWebsite={business.websiteUrl} compact /></div></div></div>
+                <div className="col-span-full grid min-h-72 place-items-center bg-[#f3efe6] p-10 text-center"><div><Radar className="mx-auto size-7 text-black/45" /><h2 className="mt-4 text-2xl font-semibold tracking-[-.04em]">No lead-form check yet.</h2><p className="mt-2 text-sm text-black/55">Find the public form closest to a new customer.</p><div className="mt-6"><DiscoveryDialog team={team} initialWebsite={business.websiteUrl} compact /></div></div></div>
               )}
             </div>
           </>
@@ -162,14 +162,48 @@ function Metric({ label, value, icon: Icon, alert = false }: { label: string; va
   return <div className="flex items-end justify-between bg-[#f3efe6] p-5"><div><p className="text-4xl font-semibold tracking-[-.06em]">{value}</p><p className="mt-2 text-xs text-black/52">{label}</p></div><Icon className={alert ? "size-5 text-[#d54f3d]" : "size-5 text-[#4f7134]"} /></div>;
 }
 
+function AlertTestButton({ team }: { team: TeamSummary }) {
+  const status = useQuery(api.alerts.getStatus, { teamId: team._id });
+  const sendTestAlert = useAction(api.alertActions.sendTestAlert);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  if (team.role !== "owner") return null;
+  return (
+    <div className="text-left md:text-right">
+      <Button
+        variant="outline"
+        size="sm"
+        className="rounded-full border-black/25 bg-transparent"
+        disabled={pending || status === undefined || !status.enabled}
+        onClick={() => {
+          setPending(true);
+          setMessage("");
+          setError("");
+          void sendTestAlert({ teamId: team._id })
+            .then(() => setMessage("Test alert delivered."))
+            .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "The test alert could not be delivered"))
+            .finally(() => setPending(false));
+        }}
+      >
+        {pending ? <LoaderCircle className="animate-spin" /> : <MailCheck />}
+        Send test alert
+      </Button>
+      <p className={`mt-2 max-w-64 text-[11px] ${error ? "text-[#a83222]" : "text-black/50"}`} role={error ? "alert" : "status"}>
+        {error || message || (status?.enabled ? "Failure emails go to the workspace owner." : "A valid owner email is required for alerts.")}
+      </p>
+    </div>
+  );
+}
+
 function JourneyCard({ journey, index }: { journey: FunctionReturnType<typeof api.journeys.list>[number]; index: number }) {
-  const statusLabel = journey.status === "incident" ? "Customer waiting" : journey.enabled ? journey.status : "Draft";
+  const statusLabel = journey.status === "incident" ? "Check failed" : journey.enabled ? journey.status : "Draft";
   return (
     <Link to={`journeys/${journey._id}`} className="group min-h-[270px] bg-[#f3efe6] p-6 transition hover:bg-[#e8e2d7]">
       <div className="flex justify-between"><Badge variant="outline" className={journey.status === "incident" ? "border-[#d54f3d]/50 bg-[#d54f3d]/8 text-[#a83222]" : "border-black/25 bg-transparent"}>{statusLabel}</Badge><span className="font-mono text-xs text-black/50">0{index + 1}</span></div>
       <h2 className="mt-16 text-3xl font-semibold leading-[.96] tracking-[-.045em]">{journey.name}</h2>
       <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-black/55">{journey.goal}</p>
-      <div className="mt-7 flex items-center justify-between text-xs text-black/50"><span>{journey.latestRun ? `Last run ${formatRelative(journey.latestRun.startedAt)}` : "Not run yet"}</span><ArrowRight className="size-4 transition group-hover:translate-x-1" /></div>
+      <div className="mt-7 flex items-center justify-between text-xs text-black/50"><span>{journey.latestRun ? `Last checked ${formatRelative(journey.latestRun.startedAt)}` : "Not checked yet"}</span><ArrowRight className="size-4 transition group-hover:translate-x-1" /></div>
     </Link>
   );
 }
@@ -177,7 +211,7 @@ function JourneyCard({ journey, index }: { journey: FunctionReturnType<typeof ap
 function BusinessOnboarding({ team }: { team: TeamSummary }) {
   return (
     <div className="grid min-h-[calc(100vh-152px)] items-center gap-10 lg:grid-cols-[.78fr_1.22fr]">
-      <div><p className="eyebrow">Start with the customer / 01</p><h1 className="mt-5 text-6xl font-semibold leading-[.86] tracking-[-.068em] md:text-8xl">Which journey earns the next customer?</h1><p className="mt-6 max-w-lg text-lg leading-relaxed text-black/58">Enter the business website. Signal Garden will map only safe public contact, lead, and quote paths. You choose what to protect before anything is tested.</p></div>
+      <div><p className="eyebrow">Start with one form / 01</p><h1 className="mt-5 text-6xl font-semibold leading-[.86] tracking-[-.068em] md:text-8xl">Which lead form should we protect first?</h1><p className="mt-6 max-w-lg text-lg leading-relaxed text-black/58">Enter the business website. Signal Garden finds safe public contact, quote, and demo forms. You approve the exact form before any test is submitted.</p></div>
       <DiscoveryPanel team={team} />
     </div>
   );
@@ -186,9 +220,9 @@ function BusinessOnboarding({ team }: { team: TeamSummary }) {
 function DiscoveryDialog({ team, initialWebsite, compact = false }: { team: TeamSummary; initialWebsite: string; compact?: boolean }) {
   return (
     <Dialog>
-      <DialogTrigger asChild><Button className="h-11 rounded-full px-5">{compact ? "Find first journey" : "Find a customer journey"} <Plus /></Button></DialogTrigger>
+      <DialogTrigger asChild><Button className="h-11 rounded-full px-5">{compact ? "Find first form" : "New lead-form check"} <Plus /></Button></DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto border-black/20 bg-[#f3efe6] sm:max-w-3xl">
-        <DialogHeader><DialogTitle className="text-3xl tracking-[-.045em]">Find a journey worth protecting.</DialogTitle><DialogDescription>Signal Garden reads the public website and proposes only safe lead, contact, and quote paths.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle className="text-3xl tracking-[-.045em]">Find a lead form worth protecting.</DialogTitle><DialogDescription>Signal Garden reads the public website and proposes only safe lead, contact, quote, and demo forms.</DialogDescription></DialogHeader>
         <DiscoveryPanel team={team} initialWebsite={initialWebsite} embedded />
       </DialogContent>
     </Dialog>
@@ -213,14 +247,14 @@ function DiscoveryPanel({ team, initialWebsite = "", embedded = false }: { team:
           <div><Label htmlFor={`business-name-${embedded}`}>Business name</Label><Input id={`business-name-${embedded}`} value={businessName} onChange={(event) => setBusinessName(event.target.value)} minLength={2} maxLength={80} required className={embedded ? "mt-2 h-12" : "mt-2 h-12 border-white/22 bg-white/[.04] text-white"} /></div>
           <div className="mt-5"><Label htmlFor={`website-url-${embedded}`}>Public website</Label><Input id={`website-url-${embedded}`} type="url" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://yourbusiness.com" required className={embedded ? "mt-2 h-12" : "mt-2 h-12 border-white/22 bg-white/[.04] text-white"} /></div>
           {error && <p role="alert" className={embedded ? "mt-4 text-sm text-[#a83222]" : "mt-4 text-sm text-[#ff9b8b]"}>{error}</p>}
-          <Button type="submit" disabled={pending} style={embedded ? undefined : { background: "#c8ff53", color: "#111612" }} className="mt-6 h-12 w-full rounded-full">{pending ? <><LoaderCircle className="animate-spin" /> Mapping the public journey…</> : <>Find customer journeys <ArrowRight /></>}</Button>
+          <Button type="submit" disabled={pending} style={embedded ? undefined : { background: "#c8ff53", color: "#111612" }} className="mt-6 h-12 w-full rounded-full">{pending ? <><LoaderCircle className="animate-spin" /> Finding public forms…</> : <>Find lead forms <ArrowRight /></>}</Button>
           <p className={embedded ? "mt-4 text-center text-[11px] text-black/65" : "mt-4 text-center text-[11px] text-white/65"}>Discovery reads public pages only. It does not submit a form.</p>
         </form>
       ) : (
         <div>
-          <div className="flex items-start justify-between gap-4"><div><p className="eyebrow text-[#4f7134]">{discovery.siteName}</p><h2 className="mt-2 text-3xl font-semibold tracking-[-.045em]">Choose the path closest to revenue.</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/55">{discovery.summary}</p></div><Button variant="ghost" size="sm" onClick={() => setDiscovery(null)}>Change site</Button></div>
+          <div className="flex items-start justify-between gap-4"><div><p className="eyebrow text-[#4f7134]">{discovery.siteName}</p><h2 className="mt-2 text-3xl font-semibold tracking-[-.045em]">Choose the form closest to revenue.</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/55">{discovery.summary}</p></div><Button variant="ghost" size="sm" onClick={() => setDiscovery(null)}>Change site</Button></div>
           <div className="mt-6 space-y-3">
-            {discovery.candidates.map((candidate) => <CandidateCard key={`${candidate.kind}-${candidate.startUrl}`} candidate={candidate} pending={creating === candidate.startUrl} onCreate={(settings) => { setCreating(candidate.startUrl); setError(""); void createJourney({ teamId: team._id, name: candidate.name, kind: candidate.kind, startUrl: candidate.startUrl, goal: candidate.goal, expectedReplyMinutes: settings.expectedReplyMinutes, cadence: settings.cadence, expectsConfirmation: settings.expectsConfirmation, expectsHumanReply: settings.expectsHumanReply, ...(candidate.expectedSenderDomain ? { expectedSenderDomain: candidate.expectedSenderDomain } : {}) }).then((journeyId) => navigate(`/app/journeys/${journeyId}`)).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "The journey could not be created")).finally(() => setCreating(null)); }} />)}
+            {discovery.candidates.map((candidate) => <CandidateCard key={`${candidate.kind}-${candidate.startUrl}`} candidate={candidate} pending={creating === candidate.startUrl} onCreate={(settings) => { setCreating(candidate.startUrl); setError(""); void createJourney({ teamId: team._id, name: candidate.name, kind: candidate.kind, startUrl: candidate.startUrl, goal: candidate.goal, expectedReplyMinutes: candidate.expectedReplyMinutes, cadence: settings.cadence, expectsConfirmation: settings.expectsConfirmation, expectsHumanReply: false, ...(candidate.expectedSenderDomain ? { expectedSenderDomain: candidate.expectedSenderDomain } : {}) }).then((journeyId) => navigate(`/app/journeys/${journeyId}`)).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "The lead-form check could not be created")).finally(() => setCreating(null)); }} />)}
           </div>
           {error && <p role="alert" className="mt-4 text-sm text-[#a83222]">{error}</p>}
         </div>
@@ -229,17 +263,15 @@ function DiscoveryPanel({ team, initialWebsite = "", embedded = false }: { team:
   );
 }
 
-function CandidateCard({ candidate, pending, onCreate }: { candidate: Candidate; pending: boolean; onCreate: (settings: { cadence: "manual" | "daily" | "weekly"; expectsConfirmation: boolean; expectsHumanReply: boolean; expectedReplyMinutes: number }) => void }) {
+function CandidateCard({ candidate, pending, onCreate }: { candidate: Candidate; pending: boolean; onCreate: (settings: { cadence: "manual" | "daily" | "weekly"; expectsConfirmation: boolean }) => void }) {
   const [cadence, setCadence] = useState<"manual" | "daily" | "weekly">("daily");
   const [confirmation, setConfirmation] = useState(candidate.expectsConfirmation);
-  const [reply, setReply] = useState(candidate.expectsHumanReply);
   return (
     <article className="border border-black/20 bg-white/35 p-5">
-      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start"><div><div className="flex items-center gap-2"><Badge variant="outline" className="border-black/20 bg-transparent">{candidate.kind.replace("_", " ")}</Badge>{confirmation && <span className="flex items-center gap-1 text-[11px] text-black/45"><MailCheck className="size-3" /> Email handoff</span>}</div><h3 className="mt-3 text-2xl font-semibold tracking-[-.035em]">{candidate.name}</h3><p className="mt-2 max-w-xl text-sm leading-relaxed text-black/58">{candidate.whyItMatters}</p><p className="mt-2 text-xs text-black/40">{new URL(candidate.startUrl).pathname || "/"}</p></div><Button disabled={pending} onClick={() => onCreate({ cadence, expectsConfirmation: confirmation, expectsHumanReply: confirmation && reply, expectedReplyMinutes: candidate.expectedReplyMinutes })} className="shrink-0 rounded-full">{pending ? <LoaderCircle className="animate-spin" /> : <Plus />} Protect this path</Button></div>
-      <div className="mt-5 grid gap-4 border-t border-black/12 pt-4 sm:grid-cols-3">
+      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start"><div><div className="flex items-center gap-2"><Badge variant="outline" className="border-black/20 bg-transparent">{candidate.kind.replace("_", " ")}</Badge>{confirmation && <span className="flex items-center gap-1 text-[11px] text-black/45"><MailCheck className="size-3" /> Checks confirmation</span>}</div><h3 className="mt-3 text-2xl font-semibold tracking-[-.035em]">{candidate.name}</h3><p className="mt-2 max-w-xl text-sm leading-relaxed text-black/58">{candidate.whyItMatters}</p><p className="mt-2 text-xs text-black/40">{new URL(candidate.startUrl).pathname || "/"}</p></div><Button disabled={pending} onClick={() => onCreate({ cadence, expectsConfirmation: confirmation })} className="shrink-0 rounded-full">{pending ? <LoaderCircle className="animate-spin" /> : <Plus />} Protect this form</Button></div>
+      <div className="mt-5 grid gap-4 border-t border-black/12 pt-4 sm:grid-cols-2">
         <div><Label htmlFor={`cadence-${candidate.startUrl}`} className="text-xs">Check frequency</Label><Select value={cadence} onValueChange={(value) => setCadence(value as typeof cadence)}><SelectTrigger id={`cadence-${candidate.startUrl}`} className="mt-2 h-9 bg-transparent"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="manual">Manual</SelectItem><SelectItem value="daily">Every day</SelectItem><SelectItem value="weekly">Every week</SelectItem></SelectContent></Select></div>
-        <label className="flex items-center justify-between gap-3 text-xs">Wait for confirmation <Switch checked={confirmation} onCheckedChange={(value) => { setConfirmation(value); if (!value) setReply(false); }} /></label>
-        <label className="flex items-center justify-between gap-3 text-xs">Wait for human reply <Switch checked={reply} disabled={!confirmation} onCheckedChange={setReply} /></label>
+        <label className="flex items-center justify-between gap-3 text-xs">Check confirmation email <Switch checked={confirmation} onCheckedChange={setConfirmation} /></label>
       </div>
     </article>
   );
@@ -252,7 +284,7 @@ function CreateTeamDialog({ onCreated }: { onCreated: (teamId: string) => void }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild><Button variant="ghost" size="sm" aria-label="New workspace"><Plus /><span className="hidden sm:inline">Workspace</span></Button></DialogTrigger>
-      <DialogContent className="bg-[#f3efe6]"><DialogHeader><DialogTitle>New private workspace</DialogTitle><DialogDescription>Use a separate workspace when customer data and journeys belong to another business.</DialogDescription></DialogHeader><form onSubmit={(event) => { event.preventDefault(); void createTeam({ name }).then((teamId) => { onCreated(teamId); setOpen(false); setName(""); }); }}><Label htmlFor="new-workspace">Business or team name</Label><Input id="new-workspace" value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={60} required className="mt-2" /><Button className="mt-5 w-full rounded-full" type="submit">Create private workspace</Button></form></DialogContent>
+      <DialogContent className="bg-[#f3efe6]"><DialogHeader><DialogTitle>New private workspace</DialogTitle><DialogDescription>Use a separate workspace when lead-form checks belong to another business.</DialogDescription></DialogHeader><form onSubmit={(event) => { event.preventDefault(); void createTeam({ name }).then((teamId) => { onCreated(teamId); setOpen(false); setName(""); }); }}><Label htmlFor="new-workspace">Business or team name</Label><Input id="new-workspace" value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={60} required className="mt-2" /><Button className="mt-5 w-full rounded-full" type="submit">Create private workspace</Button></form></DialogContent>
     </Dialog>
   );
 }

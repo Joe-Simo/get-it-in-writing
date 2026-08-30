@@ -18,17 +18,17 @@ export default function SignInPage() {
           ◉ Signal Garden
         </Link>
         <div>
-          <p className="eyebrow text-[#c8ff53]">Customer control room</p>
+          <p className="eyebrow text-[#c8ff53]">Lead-form monitoring</p>
           <h1 className="mt-5 max-w-3xl text-7xl font-semibold leading-[.86] tracking-[-.065em]">
-            See the journey your customers actually experience.
+            Know whether your lead form actually works.
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/55">
-            Keep every check, confirmation, reply promise, and customer-impacting
-            incident inside one private workspace.
+            See every daily check, confirmation, failure email, and piece of
+            evidence inside one private workspace.
           </p>
         </div>
         <p className="text-xs text-white/60">
-          Your workspace stays private. Public proof excludes customer and inbox data.
+          Your workspace stays private. Public proof excludes form contents and email addresses.
         </p>
       </section>
       <section className="flex items-center p-6 sm:p-12">

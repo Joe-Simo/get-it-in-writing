@@ -475,11 +475,11 @@ export const create = mutation({
       {
         kind: "website",
         label: "Website reached",
-        instruction: `Open the public journey at ${websiteDomain(startUrl)}.`,
+        instruction: `Open the public lead-form page at ${websiteDomain(startUrl)}.`,
       },
       {
         kind: "form",
-        label: "Customer request submitted",
+        label: "Test lead submitted",
         instruction:
           "Complete only the approved public contact, quote, booking, or signup form using the clearly labeled QA identity.",
       },
@@ -489,7 +489,7 @@ export const create = mutation({
         kind: "confirmation",
         label: "Confirmation issued",
         instruction:
-          "Verify that AgentMail observes a correlated acknowledgement issued to the test customer.",
+          "Verify that the correlated acknowledgement reaches the test-customer inbox.",
       });
     }
     if (args.expectsHumanReply) {
@@ -525,7 +525,7 @@ export const activate = mutation({
     const { userId, role } = await requireTeamMember(ctx, journey.teamId);
     if (role !== "owner") throw new Error("Only the team owner can activate testing");
     if (!args.authorizedPublicFormTesting) {
-      throw new Error("Confirm that you own or are authorized to test this journey");
+      throw new Error("Confirm that you own or are authorized to test this website");
     }
     const now = Date.now();
     await ctx.db.patch("customerJourneys", journey._id, {
@@ -995,10 +995,29 @@ async function createIncident(
     severity: "broken" | "customer_waiting" | "degraded";
   },
 ) {
-  await ctx.db.insert("journeyIncidents", {
+  const existing = await ctx.db
+    .query("journeyIncidents")
+    .withIndex("by_runId", (q) => q.eq("runId", args.runId))
+    .first();
+  if (existing !== null) return;
+  const createdAt = Date.now();
+  const incidentId = await ctx.db.insert("journeyIncidents", {
     ...args,
     status: "open",
-    createdAt: Date.now(),
+    createdAt,
+  });
+  const deliveryId = await ctx.db.insert("journeyAlertDeliveries", {
+    teamId: args.teamId,
+    incidentId,
+    kind: "incident",
+    token: `SG-ALERT-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`,
+    status: "pending",
+    attemptCount: 0,
+    createdAt,
+    updatedAt: createdAt,
+  });
+  await ctx.scheduler.runAfter(0, internal.alertActions.sendDelivery, {
+    deliveryId,
   });
 }
 
@@ -1040,8 +1059,8 @@ export const recordBrowserResult = internalMutation({
         checkpointKind: failedKind,
         title:
           failedKind === "website"
-            ? "Customer could not reach the journey"
-            : "Customer request could not be completed",
+            ? "Lead-form page did not open"
+            : "Lead form did not accept the test lead",
         detail: args.summary,
         severity: "broken",
       });
@@ -1068,8 +1087,8 @@ export const recordBrowserResult = internalMutation({
           status: "verified",
           detail:
             checkpoint.kind === "website"
-              ? "The public journey loaded successfully."
-              : "The approved customer request was submitted with the QA identity.",
+              ? "The public lead-form page loaded successfully."
+              : "The approved form accepted the clearly labeled test lead.",
           evidenceExcerpt: args.summary.slice(0, 600),
           occurredAt: now,
         });
@@ -1252,7 +1271,7 @@ export const recordEmailReceived = internalMutation({
         status: "verified",
         detail:
           expectation.expectedKind === "confirmation"
-            ? "AgentMail observed the correlated confirmation issued to the test customer."
+            ? "The correlated confirmation reached the test-customer inbox."
             : "The test-customer inbox received a follow-up reply.",
         evidenceExcerpt: args.evidenceExcerpt.slice(0, 600),
         occurredAt: now,

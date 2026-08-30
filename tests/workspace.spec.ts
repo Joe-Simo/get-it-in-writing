@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-test("a new owner reaches journey-first onboarding without submitting an external form", async ({ page }, testInfo) => {
+test("a new owner reaches lead-form onboarding without submitting an external form", async ({ page }, testInfo) => {
   const runId = `${Date.now()}-${testInfo.workerIndex}-${testInfo.project.name}`;
 
   await page.goto("/app", { waitUntil: "domcontentloaded" });
@@ -14,7 +14,7 @@ test("a new owner reaches journey-first onboarding without submitting an externa
   await page.getByRole("button", { name: /create private workspace/i }).click();
 
   await expect(
-    page.getByRole("heading", { name: /which journey earns the next customer/i }),
+    page.getByRole("heading", { name: /which lead form should we protect first/i }),
   ).toBeVisible();
   await expect(page.getByLabel("Business name")).toBeVisible();
   await expect(page.getByLabel("Public website")).toBeVisible();

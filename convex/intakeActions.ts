@@ -60,9 +60,9 @@ export const requestAudit = action({
     try {
       const message = await client.inboxes.messages.send(inboxId, {
         to: email,
-        subject: `Your ${domain} journey check is ready to set up`,
-        text: `Signal Garden can check the customer path on ${domain} and alert you when a form, confirmation, or reply handoff breaks.\n\nSet up the journey: ${new URL("/app", appUrl).toString()}\n\nNo test will run until you sign in, review the exact path, and confirm that you are authorized to test it.${referenceLine}`,
-        html: `<main style="font-family:system-ui;max-width:620px;margin:auto;color:#111"><p style="font-size:12px;text-transform:uppercase;letter-spacing:.12em">Signal Garden</p><h1>Know when ${escapeHtml(domain)} loses a customer.</h1><p>Set up a real check for the form, confirmation, and reply handoffs that matter.</p><p><a href="${escapeHtml(new URL("/app", appUrl).toString())}">Review and activate the journey</a></p><p style="color:#555">No test will run until you sign in, review the exact path, and confirm that you are authorized to test it.</p>${reference ? `<p>Journey reference: ${escapeHtml(reference)}</p>` : ""}</main>`,
+        subject: `Set up daily lead-form monitoring for ${domain}`,
+        text: `Signal Garden checks your public lead form every day and emails you if the page, form, or confirmation stops working.\n\nSet up your check: ${new URL("/app", appUrl).toString()}\n\nFree private beta. No card required. No test will run until you sign in, review the exact form, and confirm that you are authorized to test it.${referenceLine}`,
+        html: `<main style="font-family:system-ui;max-width:620px;margin:auto;color:#111"><p style="font-size:12px;text-transform:uppercase;letter-spacing:.12em">Signal Garden</p><h1>Know when the lead form on ${escapeHtml(domain)} stops working.</h1><p>Signal Garden checks the public form every day and emails you if the page, submission, or confirmation fails.</p><p><a href="${escapeHtml(new URL("/app", appUrl).toString())}">Review and activate the check</a></p><p><strong>Free private beta. No card required.</strong></p><p style="color:#555">No test will run until you sign in, review the exact form, and confirm that you are authorized to test it.</p>${reference ? `<p>Check reference: ${escapeHtml(reference)}</p>` : ""}</main>`,
       });
       await ctx.runMutation(internal.intake.markSent, {
         requestId,

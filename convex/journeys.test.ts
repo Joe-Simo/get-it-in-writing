@@ -198,8 +198,59 @@ test("a provider failure is recorded as an execution error, not a customer incid
       .query("journeyIncidents")
       .withIndex("by_runId", (q) => q.eq("runId", runId))
       .collect(),
+    alerts: await ctx.db
+      .query("journeyAlertDeliveries")
+      .withIndex("by_status_and_updatedAt", (q) => q.eq("status", "pending"))
+      .collect(),
   }));
   expect(result.run).toMatchObject({ status: "error" });
   expect(result.journey).toMatchObject({ status: "draft" });
   expect(result.incidents).toHaveLength(0);
+  expect(result.alerts).toHaveLength(0);
+});
+
+test("a customer-facing lead-form failure queues one owner alert", async () => {
+  const { t, journeyId, ownerId } = await createJourneyFixture();
+  await t.withIdentity({ subject: ownerId }).mutation(api.journeys.activate, {
+    journeyId,
+    authorizedPublicFormTesting: true,
+  });
+  const runId = await t.mutation(internal.journeys.createRun, {
+    journeyId,
+    trigger: "manual",
+    requesterId: ownerId,
+  });
+
+  await t.mutation(internal.journeys.recordBrowserResult, {
+    runId,
+    success: false,
+    summary: "The public form did not accept the test lead.",
+    failureKind: "form",
+  });
+  await t.mutation(internal.journeys.recordBrowserResult, {
+    runId,
+    success: false,
+    summary: "The repeated provider callback reported the same form failure.",
+    failureKind: "form",
+  });
+
+  const result = await t.run(async (ctx) => {
+    const incidents = await ctx.db
+      .query("journeyIncidents")
+      .withIndex("by_runId", (q) => q.eq("runId", runId))
+      .collect();
+    const alerts = await ctx.db
+      .query("journeyAlertDeliveries")
+      .withIndex("by_status_and_updatedAt", (q) => q.eq("status", "pending"))
+      .collect();
+    return { incidents, alerts };
+  });
+  expect(result.incidents).toHaveLength(1);
+  expect(result.alerts).toHaveLength(1);
+  expect(result.alerts[0]).toMatchObject({
+    kind: "incident",
+    incidentId: result.incidents[0]?._id,
+    status: "pending",
+    attemptCount: 0,
+  });
 });

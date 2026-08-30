@@ -2,7 +2,7 @@
 
 - **Project:** Signal Garden
 - **Event:** Convex All Gas Hackathon
-- **What it does:** Runs authorized mystery-shopper journeys across a business's public website, confirmation, and reply handoffs, then opens evidence-backed incidents when the customer outcome breaks.
+- **What it does:** Tests a business's lead form every day and emails the owner with evidence when the page, submission, or confirmation fails.
 - **Live app:** https://resilient-salamander-937.convex.site
 - **Repo:** https://github.com/Joe-Simo/signal-garden-all-gas
 - **Frontend:** Convex static hosting
@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna, gpt-5.6-terra
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T15:43:13Z
+- **Last updated:** 2026-08-30T16:09:16Z
 
 ## Log
 
@@ -67,31 +67,23 @@ reply. Added owner-only review-route settings and recipient authorization tests
 
 ### 2026-08-30 - working tree
 
-Rebuilt Signal Garden as a general-purpose customer-journey watchdog for any
-business that depends on public contact, lead, or quote-request handoffs. The
-owner enters a website, Firecrawl discovers safe paths, OpenAI structures the
-journey, and an explicit owner authorization is required before a clearly
-labeled QA customer submits the public form. Convex stores the journey, runs,
-checkpoints, schedules, email expectations, incidents, and revocable public
-proof (`convex/journeys.ts`, `convex/journeyActions.ts`, `convex/schema.ts`).
+Rebuilt Signal Garden around one concrete promise: it tests an authorized lead
+form every day and emails the owner when the page, submission, or confirmation
+fails. Simplified the public site and private workspace around forms, checks,
+alerts, evidence, and a free one-site private beta.
 
-Added a real AgentMail confirmation loop with signed-webhook handling and a
-minute-level mailbox reconciliation fallback. Provider failures are separated
-from customer incidents, overlapping runs are blocked, and a team member can
-cancel an active run without manufacturing a false incident. No customer
-identity, inbox address, form content, private note, provider identifier, or
-secret is exposed by the public report.
+Added durable AgentMail owner-alert deliveries with deduplicated sends,
+bounded retries, a five-minute retry cron, and a real owner-only test-alert
+action. Customer-facing failures queue an alert; provider execution errors do
+not create false incidents or failure emails (`convex/alerts.ts`,
+`convex/alertActions.ts`, `convex/journeys.ts`, `convex/crons.ts`).
 
-Dogfooded the complete production path against Signal Garden itself. The first
-Firecrawl Interact attempt exposed an incorrect timeout unit; after correcting
-it to seconds and adding explicit session cleanup, Firecrawl reached the live
-site and completed the authorized request. AgentMail recorded the correlated
-confirmation addressed to the QA customer, and Convex reconciled all three
-checkpoints into one healthy run. Verified strict lint and type checking, 39
-focused tests, all three WebGPU shaders, the production build, nine local
-desktop/mobile browser journeys, and zero Axe violations or console errors on
-the live landing and proof pages at desktop and mobile sizes before publishing
-the customer-safe proof on Convex Static Hosting.
+Deployed only the dedicated `signal-garden-all-gas` production project. The
+owner test alert delivered through AgentMail on its first attempt and Convex
+recorded it as sent. Verified strict lint and type checking, 42 focused tests,
+all three WebGPU shaders, the production build, nine local desktop/mobile
+browser journeys, and zero Axe violations or console errors on the live landing
+and proof pages at desktop and mobile sizes.
 
 Public journey proof:
 https://resilient-salamander-937.convex.site/proof/setup-request-to-confirmation-cd8df1tc
