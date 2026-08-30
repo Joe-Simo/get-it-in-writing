@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import LandingPage from "@/marketing/LandingPage";
 
 const BackendApp = lazy(() => import("@/backend/BackendApp"));
-const PublicJourneyPage = lazy(() => import("@/backend/PublicJourneyPage"));
 const backendConfigured = Boolean(import.meta.env.VITE_CONVEX_URL);
 
 export default function App() {
@@ -18,7 +17,6 @@ export default function App() {
               path="/app/*"
               element={backendConfigured ? <BackendApp /> : <LocalSetupNotice />}
             />
-            <Route path="/proof/:slug" element={<PublicJourneyPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
@@ -29,23 +27,23 @@ export default function App() {
 
 function RouteLoader() {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#0b0e0c] text-[#f2eee5]">
-      <span className="size-5 animate-pulse rounded-full bg-[#c8ff53]" />
-      <span className="sr-only">Loading Signal Garden</span>
+    <main className="grid min-h-screen place-items-center bg-[#f2efe7] text-[#101511]">
+      <span className="size-5 animate-pulse rounded-full bg-[#244cff]" />
+      <span className="sr-only">Loading Get It in Writing</span>
     </main>
   );
 }
 
 function LocalSetupNotice() {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#f3efe6] p-6 text-[#111612]">
+    <main className="grid min-h-screen place-items-center bg-[#f2efe7] p-6 text-[#101511]">
       <div className="max-w-lg border border-black/20 p-8">
-        <p className="eyebrow">Local setup</p>
+        <p className="ink-label">Local setup</p>
         <h1 className="mt-4 text-5xl font-semibold tracking-[-.055em]">
-          Connect the dedicated backend.
+          Connect this project’s private decision backend.
         </h1>
         <p className="mt-5 text-black/60">
-          Set VITE_CONVEX_URL for this project before opening the control room.
+          Set VITE_CONVEX_URL for this project before opening the Promise Wallet.
         </p>
       </div>
     </main>

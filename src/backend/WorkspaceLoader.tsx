@@ -1,10 +1,7 @@
-import { LoaderCircle } from "lucide-react";
-
-export function WorkspaceLoader() {
+export default function WorkspaceLoader() {
   return (
-    <div className="grid min-h-screen place-items-center bg-[#0a0d0b] text-[#f2eee5]">
-      <LoaderCircle className="size-7 animate-spin text-[#c8ff53]" />
-      <span className="sr-only">Loading workspace</span>
-    </div>
+    <main className="grid min-h-screen place-items-center bg-paper text-ink" aria-live="polite">
+      <div className="text-center"><span className="mx-auto block size-5 animate-pulse rounded-full bg-cobalt" /><p className="mt-4 text-sm">Opening your private Promise Wallet…</p></div>
+    </main>
   );
 }

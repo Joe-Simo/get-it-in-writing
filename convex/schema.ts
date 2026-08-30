@@ -1,6 +1,14 @@
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  assessmentStatus,
+  decisionCategory,
+  decisionStatus,
+  operationalFailure,
+  outboundStatus,
+  proofVerdict,
+} from "./lib/decisionState";
 
 export default defineSchema({
   ...authTables,
@@ -49,6 +57,142 @@ export default defineSchema({
     status: v.union(v.literal("accepted"), v.literal("rejected")),
     receivedAt: v.number(),
   }).index("by_provider_and_deliveryId", ["provider", "deliveryId"]),
+  decisions: defineTable({
+    ownerId: v.id("users"),
+    title: v.string(),
+    sourceUrl: v.string(),
+    sourceHost: v.string(),
+    requirementText: v.string(),
+    context: v.optional(v.string()),
+    category: decisionCategory,
+    status: decisionStatus,
+    operationalFailure: v.optional(operationalFailure),
+    operationalMessage: v.optional(v.string()),
+    crawlId: v.optional(v.string()),
+    researchStartedAt: v.optional(v.number()),
+    analyzedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_ownerId_and_updatedAt", ["ownerId", "updatedAt"])
+    .index("by_ownerId_and_status_and_updatedAt", [
+      "ownerId",
+      "status",
+      "updatedAt",
+    ])
+    .index("by_crawlId", ["crawlId"]),
+  decisionRequirements: defineTable({
+    decisionId: v.id("decisions"),
+    ownerId: v.id("users"),
+    text: v.string(),
+    order: v.number(),
+    createdAt: v.number(),
+  }).index("by_decisionId_and_order", ["decisionId", "order"]),
+  sourceDocuments: defineTable({
+    decisionId: v.id("decisions"),
+    crawlId: v.string(),
+    url: v.string(),
+    title: v.optional(v.string()),
+    contentHash: v.string(),
+    excerpt: v.string(),
+    capturedAt: v.number(),
+  })
+    .index("by_decisionId_and_url", ["decisionId", "url"])
+    .index("by_crawlId_and_url", ["crawlId", "url"]),
+  claimAssessments: defineTable({
+    decisionId: v.id("decisions"),
+    requirementId: v.id("decisionRequirements"),
+    status: assessmentStatus,
+    statement: v.string(),
+    reason: v.string(),
+    sourceUrl: v.optional(v.string()),
+    sourceTitle: v.optional(v.string()),
+    sourceExcerpt: v.optional(v.string()),
+    order: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_decisionId_and_order", ["decisionId", "order"])
+    .index("by_requirementId", ["requirementId"]),
+  officialContacts: defineTable({
+    decisionId: v.id("decisions"),
+    email: v.string(),
+    label: v.string(),
+    sourceUrl: v.string(),
+    sourceExcerpt: v.string(),
+    createdAt: v.number(),
+  }).index("by_decisionId_and_createdAt", ["decisionId", "createdAt"]),
+  confirmationRequests: defineTable({
+    decisionId: v.id("decisions"),
+    ownerId: v.id("users"),
+    requestToken: v.string(),
+    recipient: v.optional(v.string()),
+    recipientSource: v.union(
+      v.literal("official_page"),
+      v.literal("user_provided"),
+      v.literal("unselected"),
+    ),
+    recipientSourceUrl: v.optional(v.string()),
+    subject: v.string(),
+    body: v.string(),
+    followUpCount: v.number(),
+    status: outboundStatus,
+    outboundId: v.optional(v.string()),
+    threadId: v.optional(v.string()),
+    messageId: v.optional(v.string()),
+    approvedAt: v.optional(v.number()),
+    sentAt: v.optional(v.number()),
+    deliveredAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_decisionId_and_createdAt", ["decisionId", "createdAt"])
+    .index("by_requestToken", ["requestToken"])
+    .index("by_outboundId", ["outboundId"])
+    .index("by_messageId", ["messageId"])
+    .index("by_threadId", ["threadId"])
+    .index("by_status_and_createdAt", ["status", "createdAt"]),
+  confirmationReplies: defineTable({
+    decisionId: v.id("decisions"),
+    requestId: v.id("confirmationRequests"),
+    messageId: v.string(),
+    threadId: v.string(),
+    sender: v.string(),
+    subject: v.string(),
+    body: v.string(),
+    receivedAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_requestId_and_receivedAt", ["requestId", "receivedAt"])
+    .index("by_messageId", ["messageId"]),
+  proofCards: defineTable({
+    decisionId: v.id("decisions"),
+    ownerId: v.id("users"),
+    basis: v.union(v.literal("official_source"), v.literal("written_reply")),
+    verdict: proofVerdict,
+    exactRequirement: v.string(),
+    summary: v.string(),
+    conditions: v.array(v.string()),
+    sourceUrls: v.array(v.string()),
+    sourceExcerpts: v.array(v.string()),
+    writtenMessage: v.optional(v.string()),
+    suggestedFollowUp: v.optional(v.string()),
+    recipient: v.optional(v.string()),
+    sentAt: v.optional(v.number()),
+    receivedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_ownerId_and_createdAt", ["ownerId", "createdAt"])
+    .index("by_decisionId", ["decisionId"]),
+  decisionEvents: defineTable({
+    decisionId: v.id("decisions"),
+    fromStatus: v.optional(decisionStatus),
+    toStatus: decisionStatus,
+    label: v.string(),
+    occurredAt: v.number(),
+  }).index("by_decisionId_and_occurredAt", ["decisionId", "occurredAt"]),
+  // The tables below belong to the retired lead-form monitor. They remain in
+  // the schema so its existing deployment data is preserved, but no current
+  // public function or route exposes them.
   businessProfiles: defineTable({
     teamId: v.id("teams"),
     websiteUrl: v.string(),

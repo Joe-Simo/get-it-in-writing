@@ -1,92 +1,68 @@
-# Signal Garden
+# Get It in Writing
 
-Signal Garden tests a business's lead form every day and emails the owner when
-it breaks. Each authorized check opens the real public page, submits one clearly
-labeled test lead, verifies the success state and expected confirmation, and
-shows exactly which step failed.
+**Don’t rely on “probably.”**
 
-[Open Signal Garden](https://resilient-salamander-937.convex.site) ·
-[Inspect the latest real check](https://resilient-salamander-937.convex.site/proof/setup-request-to-confirmation-cd8df1tc)
+Get It in Writing protects everyday consumer decisions. Paste the official page
+you are about to rely on and state the exact thing that must be true. The app
+separates what the source establishes from vague or missing language, then helps
+you get only the consequential gap confirmed in writing.
 
-## Why it exists
+[Open the production app](https://resilient-salamander-937.convex.site)
 
-Uptime monitoring can prove that a page returned `200 OK`. It cannot prove that
-a visitor can submit the form or receive the expected acknowledgement. These
-failures are often silent, so a business discovers them only after leads have
-already been lost.
+## The product
 
-Signal Garden is for home-service companies, agencies, consultants, B2B sales
-teams, and other businesses whose next customer starts with a website form.
+1. Start a private case with an official page and one exact requirement.
+2. Review a source-backed Reliance Map: established, vague or conditional, and
+   not established.
+3. If a material gap remains, review the official recipient and exact message.
+4. Explicitly approve the request before it is sent.
+5. When a real reply arrives, keep its answer, conditions, sources, and scope in
+   a private Proof Card.
 
-## How a check works
+The first release is intended for ordinary bookings, rentals, purchases, and
+services. It is not for medical, legal, financial, insurance, employment, or
+safety guarantees. It never guesses contact addresses and never sends without
+the owner’s approval.
 
-1. The owner enters the business website.
-2. Signal Garden finds the strongest public contact, quote, or demo form.
-3. The owner reviews the exact form and explicitly authorizes testing.
-4. A clearly identified QA submission completes the approved public form once.
-5. Signal Garden verifies the page result and expected confirmation email.
-6. If a customer-facing step fails, the owner receives a plain-language email
-   with a direct link to the check details and rerun control.
+## System boundaries
 
-The private beta monitors one website and one approved lead form once per day.
-Signal Garden never enters payment, login, government ID, health, financial,
-or other sensitive data; bypasses a captcha; uploads files; books scarce time;
-or submits without owner authorization. A test-alert control lets the owner
-verify email delivery without creating a fake website failure.
+- Convex owns authenticated private cases, the realtime state machine, source
+  records, confirmation status, replies, and Proof Cards.
+- Firecrawl performs bounded research on the submitted official domain.
+- OpenAI produces structured assessments that are checked against the captured
+  source text before supportive claims are stored.
+- AgentMail sends the owner-approved message and correlates real delivery and
+  reply events.
+- Convex Static Hosting serves the production frontend at `convex.site`.
 
-If a captcha, sensitive field, or ambiguous action makes the form unsafe to
-submit, Signal Garden pauses monitoring and asks the owner to review it. A
-safety stop is never reported as a broken customer experience.
+All provider credentials stay in server-side Convex environment variables.
+No secret belongs in a client environment variable, source file, build log, or
+browser bundle.
 
-## Real production check
+## Local development
 
-The featured proof page comes from a real owner-authorized check against Signal
-Garden's own production setup form. Firecrawl reached the live
-`convex.site`, completed its public request form, and observed the visible
-success state. AgentMail recorded the correlated confirmation addressed to the
-QA customer. Convex joined those signals into one healthy check. The production
-owner test-alert action also delivered through AgentMail and recorded a sent
-delivery on its first attempt. The public
-projection excludes customer identities, inbox addresses, form contents,
-private notes, provider identifiers, and secrets.
-
-## Implementation
-
-- React, TypeScript, Vite, Tailwind CSS, and shadcn/ui
-- Convex Auth, realtime database, actions, HTTP actions, crons, scheduled
-  functions, and Static Hosting
-- OpenAI structured outputs for safe form discovery and result evaluation
-- Firecrawl scrape and Interact for real public form execution
-- AgentMail confirmation monitoring, owner alerts, webhooks, and mailbox reconciliation
-
-## Run locally
-
-Install dependencies with Bun:
+Install dependencies and connect this checkout to its own Convex deployment:
 
 ```bash
 bun install
+bun run dev:full
 ```
 
-Connect a new Convex deployment for your own environment. Keep every secret in
-Convex server-side environment variables, never in client files:
+Required server-side deployment environment names:
 
 ```text
 OPENAI_API_KEY
 FIRECRAWL_API_KEY
 AGENTMAIL_API_KEY
 AGENTMAIL_INBOX_ID
-AGENTMAIL_WEBHOOK_SECRET
 SITE_URL
 PUBLIC_APP_URL
 ```
 
-Start the frontend and Convex development workflow:
+`AGENTMAIL_WEBHOOK_SECRET` is required when the deployed webhook is configured
+to verify AgentMail signatures.
 
-```bash
-bun run dev:full
-```
-
-## Quality checks
+## Verification
 
 ```bash
 bun run lint

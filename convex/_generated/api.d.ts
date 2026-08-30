@@ -8,21 +8,16 @@
  * @module
  */
 
-import type * as alertActions from "../alertActions.js";
-import type * as alerts from "../alerts.js";
 import type * as auth from "../auth.js";
-import type * as crons from "../crons.js";
+import type * as confirmationOpenAI from "../confirmationOpenAI.js";
+import type * as confirmations from "../confirmations.js";
+import type * as decisions from "../decisions.js";
 import type * as http from "../http.js";
-import type * as intake from "../intake.js";
-import type * as intakeActions from "../intakeActions.js";
-import type * as journeyActions from "../journeyActions.js";
-import type * as journeys from "../journeys.js";
-import type * as lib_journeySafety from "../lib/journeySafety.js";
+import type * as lib_decisionState from "../lib/decisionState.js";
+import type * as lib_validation from "../lib/validation.js";
 import type * as model_auth from "../model/auth.js";
-import type * as teamActions from "../teamActions.js";
-import type * as teams from "../teams.js";
-import type * as webhookVerification from "../webhookVerification.js";
-import type * as webhooks from "../webhooks.js";
+import type * as research from "../research.js";
+import type * as researchOpenAI from "../researchOpenAI.js";
 
 import type {
   ApiFromModules,
@@ -31,21 +26,16 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  alertActions: typeof alertActions;
-  alerts: typeof alerts;
   auth: typeof auth;
-  crons: typeof crons;
+  confirmationOpenAI: typeof confirmationOpenAI;
+  confirmations: typeof confirmations;
+  decisions: typeof decisions;
   http: typeof http;
-  intake: typeof intake;
-  intakeActions: typeof intakeActions;
-  journeyActions: typeof journeyActions;
-  journeys: typeof journeys;
-  "lib/journeySafety": typeof lib_journeySafety;
+  "lib/decisionState": typeof lib_decisionState;
+  "lib/validation": typeof lib_validation;
   "model/auth": typeof model_auth;
-  teamActions: typeof teamActions;
-  teams: typeof teams;
-  webhookVerification: typeof webhookVerification;
-  webhooks: typeof webhooks;
+  research: typeof research;
+  researchOpenAI: typeof researchOpenAI;
 }>;
 
 /**
@@ -75,5 +65,7 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
+  agentmail: import("@agentmail/convex/_generated/component.js").ComponentApi<"agentmail">;
+  firecrawl: import("@firecrawl/firecrawl-convex/_generated/component.js").ComponentApi<"firecrawl">;
   staticHosting: import("@convex-dev/static-hosting/_generated/component.js").ComponentApi<"staticHosting">;
 };

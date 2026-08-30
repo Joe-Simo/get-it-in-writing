@@ -17,6 +17,7 @@ lerna-debug.log*
 test-results
 playwright-report
 .audit/
+artifacts/
 dist
 dist-ssr
 *.local
