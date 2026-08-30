@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T21:40:32Z
+- **Last updated:** 2026-08-30T22:18:25Z
 
 ## Log
 
@@ -180,3 +180,26 @@ Proof Cards, monitors, and timeline events (`convex/decisions.ts`,
 Added ownership and cascading-deletion coverage. Deployed the correction and
 verified strict lint and type checking, 23 focused tests, the production build,
 and 14 applicable desktop/mobile browser journeys.
+
+### 2026-08-30 - 1c056e8
+
+Hardened the real decision lifecycle around provider-owned evidence. When the
+initial crawl does not expose a usable contact, Firecrawl now performs a
+same-domain contact search; only relevant service mailboxes found verbatim on
+official pages are accepted. Legal, privacy, career, and no-reply addresses are
+rejected. The confirmation interface now locks a source-checked recipient to
+its evidence and exposes manual entry only as an explicit alternative.
+
+Created a genuine production pre-booking case for Abode Malua Bay. The live
+Reliance Map preserved six official pages, found that interconnecting rooms are
+subject to availability and cannot be guaranteed by the published language,
+and prepared one narrowly scoped request to the provider's published
+Reservations address. The exact draft is saved and remains unsent pending the
+owner's explicit approval; no reply or Proof Card is claimed yet.
+
+Added deterministic ownership, inbound-reply, source-change, duplicate-event,
+and official-contact tests. Fixed a WebGPU readiness race and expanded rendered
+coverage to 1440, 1024, 768, and 390 pixel widths. Verified strict lint and type
+checking, 27 unit/integration tests, the production build, and 23 applicable
+browser checks before deploying only `joe-simo/signal-garden-all-gas` to Convex
+Static Hosting.
