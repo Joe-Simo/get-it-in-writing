@@ -29,6 +29,24 @@ const publicGarden = v.union(
       support: v.union(v.literal("supports"), v.literal("challenges"), v.literal("context")),
     })),
     brief: v.union(v.null(), v.object({ title: v.string(), summary: v.string(), body: v.string() })),
+    process: v.object({
+      pagesProcessed: v.number(),
+      sourceCount: v.number(),
+      claimCount: v.number(),
+      deliveryCount: v.number(),
+      verifiedReplyCount: v.number(),
+      events: v.array(v.object({
+        type: v.union(
+          v.literal("mission"),
+          v.literal("crawl"),
+          v.literal("source"),
+          v.literal("claim"),
+          v.literal("brief"),
+          v.literal("email"),
+        ),
+        label: v.string(),
+      })),
+    }),
   }),
 );
 
@@ -95,18 +113,39 @@ export const getPublic = query({
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .unique();
     if (garden === null || garden.revokedAt !== undefined) return null;
-    const [mission, sources, claims, links, briefs] = await Promise.all([
+    const [mission, sources, claims, links, briefs, events, deliveries, replies] = await Promise.all([
       ctx.db.get("missions", garden.missionId),
       ctx.db.query("sources").withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId)).take(250),
       ctx.db.query("claims").withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId)).take(250),
       ctx.db.query("claimSources").withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId)).take(500),
       ctx.db.query("briefs").withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId)).order("desc").take(1),
+      ctx.db.query("missionEvents").withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId)).order("desc").take(16),
+      ctx.db.query("emailDeliveries").withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId)).take(50),
+      ctx.db.query("inboundReplies").withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId)).take(50),
     ]);
     if (mission === null) return null;
+    const claimSummaries = new Map(
+      claims.map((claim) => [claim._id, claim.summary] as const),
+    );
+    const summariesBySource = new Map<string, string[]>();
+    for (const link of links) {
+      const summary = claimSummaries.get(link.claimId);
+      if (!summary) continue;
+      const existing = summariesBySource.get(link.sourceId) ?? [];
+      if (!existing.includes(summary)) existing.push(summary);
+      summariesBySource.set(link.sourceId, existing);
+    }
     return {
       question: mission.question,
       publishedAt: garden.publishedAt,
-      sources: sources.map((source) => ({ _id: source._id, url: source.url, title: source.title, excerpt: source.excerpt })),
+      sources: sources.map((source) => ({
+        _id: source._id,
+        url: source.url,
+        title: source.title,
+        excerpt:
+          summariesBySource.get(source._id)?.slice(0, 2).join(" ") ||
+          source.excerpt,
+      })),
       claims: claims.map((claim) => ({ _id: claim._id, text: claim.text, summary: claim.summary, status: claim.status, confidence: claim.confidence, positionX: claim.positionX, positionY: claim.positionY })),
       links: links.map((link) => ({ _id: link._id, claimId: link.claimId, sourceId: link.sourceId, support: link.support })),
       brief: briefs[0]
@@ -116,6 +155,17 @@ export const getPublic = query({
             body: briefs[0].body,
           }
         : null,
+      process: {
+        pagesProcessed: mission.pagesProcessed,
+        sourceCount: mission.sourceCount,
+        claimCount: mission.claimCount,
+        deliveryCount: deliveries.length,
+        verifiedReplyCount: replies.length,
+        events: events
+          .slice()
+          .reverse()
+          .map((event) => ({ type: event.type, label: event.label })),
+      },
     };
   },
 });

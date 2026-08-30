@@ -1,21 +1,41 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, ExternalLink, LoaderCircle } from "lucide-react";
+import Markdown from "react-markdown";
+import {
+  ArrowDown,
+  ArrowLeft,
+  CheckCircle2,
+  ExternalLink,
+  LoaderCircle,
+} from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { EvidenceGraph } from "@/components/observatory/EvidenceGraph";
 import { Badge } from "@/components/ui/badge";
-import { demoEdges, demoNodes, demoQuestion } from "@/lib/demo-data";
+import { Button } from "@/components/ui/button";
 import type { EvidenceEdge, EvidenceNode } from "@/lib/graph-types";
+
+type PublicBrief = {
+  title: string;
+  summary: string;
+  body: string;
+};
+
+type PublicProcess = {
+  pagesProcessed: number;
+  sourceCount: number;
+  claimCount: number;
+  deliveryCount: number;
+  verifiedReplyCount: number;
+  events: Array<{
+    type: "mission" | "crawl" | "source" | "claim" | "brief" | "email";
+    label: string;
+  }>;
+};
 
 export default function PublicGardenPage() {
   const { slug = "" } = useParams();
-  const isPreview = slug === "preview";
-  const garden = useQuery(api.gardens.getPublic, isPreview ? "skip" : { slug });
-
-  if (isPreview) {
-    return <GardenView question={demoQuestion} nodes={demoNodes} edges={demoEdges} preview />;
-  }
+  const garden = useQuery(api.gardens.getPublic, { slug });
   if (garden === undefined) return <GardenLoader />;
   if (garden === null) return <UnavailableGarden />;
 
@@ -47,60 +67,289 @@ export default function PublicGardenPage() {
     support: link.support,
   }));
 
-  return <GardenView question={garden.question} nodes={[...sourceNodes, ...claimNodes]} edges={edges} />;
+  return (
+    <GardenView
+      question={garden.question}
+      nodes={[...sourceNodes, ...claimNodes]}
+      edges={edges}
+      brief={garden.brief}
+      process={garden.process}
+    />
+  );
 }
 
 function GardenView({
   question,
   nodes,
   edges,
-  preview = false,
+  brief,
+  process,
 }: {
   question: string;
   nodes: EvidenceNode[];
   edges: EvidenceEdge[];
-  preview?: boolean;
+  brief: PublicBrief | null;
+  process: PublicProcess;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(nodes[0]?.id ?? null);
   const selected = nodes.find((node) => node.id === selectedId) ?? nodes[0];
+  const displayBrief = brief
+    ? {
+        ...brief,
+        summary: replaceClaimIds(brief.summary, nodes),
+        body: replaceClaimIds(brief.body, nodes),
+      }
+    : null;
 
   return (
-    <main className="min-h-screen bg-[#0a0d0b] p-4 text-[#f2eee5] md:p-8">
-      <div className="mx-auto max-w-[1500px]">
-        <div className="flex items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-2 text-sm text-white/55 hover:text-white">
+    <main className="min-h-screen bg-[#0a0d0b] text-[#f2eee5]">
+      <a href="#decision-brief" className="skip-link">
+        Skip to decision brief
+      </a>
+      <div className="mx-auto max-w-[1500px] px-4 pb-16 pt-4 md:px-8 md:pt-8">
+        <header className="flex items-center justify-between gap-4">
+          <Link to="/" className="flex items-center gap-2 text-sm text-white/55 transition hover:text-white">
             <ArrowLeft className="size-4" /> Signal Garden
           </Link>
-          <Badge variant="outline" className="border-white/25 bg-transparent text-white">
-            {preview ? "Verified docs preview" : "Public read-only garden"}
+          <Badge variant="outline" className="border-white/30 bg-transparent text-white">
+            Public read-only decision
           </Badge>
-        </div>
-        <div className="mt-12 grid gap-8 lg:grid-cols-[.7fr_1.3fr]">
-          <section>
-            <p className="eyebrow text-[#c7ff4a]">Published research garden</p>
-            <h1 className="mt-5 text-5xl font-semibold leading-[.92] tracking-[-.055em] md:text-7xl">{question}</h1>
-            <p className="mt-6 max-w-xl text-white/55">
-              This view contains public claims and sources only. Team identities, email metadata, private notes, and webhook records are excluded server-side.
-            </p>
-            {selected && (
-              <article className="mt-12 border-t border-white/20 pt-6">
-                <p className="eyebrow text-white/60">Selected signal</p>
-                <h2 className="mt-3 text-2xl font-semibold">{selected.label}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-white/55">{selected.detail}</p>
-                {selected.url && (
-                  <a href={selected.url} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm text-[#c7ff4a]">
-                    Inspect source <ExternalLink className="size-3.5" />
+        </header>
+
+        <section className="mt-12 grid gap-8 lg:grid-cols-[.78fr_1.22fr] lg:gap-12">
+          <div className="flex flex-col">
+            <p className="eyebrow text-[#c7ff4a]">Decision under review</p>
+            <h1 className="mt-5 text-5xl font-semibold leading-[.92] tracking-[-.055em] md:text-7xl">
+              {question}
+            </h1>
+            {displayBrief && (
+              <div className="mt-8 border-l border-[#c7ff4a] pl-5">
+                <p className="eyebrow text-white/60">Recommendation</p>
+                <h2 className="mt-3 text-2xl font-semibold leading-tight tracking-[-.03em]">
+                  {displayBrief.title}
+                </h2>
+                <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/65">
+                  {displayBrief.summary}
+                </p>
+                <Button asChild variant="outline" className="mt-5 rounded-full border-white/30 bg-transparent text-white hover:bg-white/10">
+                  <a href="#decision-brief">
+                    Read the complete brief <ArrowDown className="size-4" />
                   </a>
-                )}
+                </Button>
+              </div>
+            )}
+            <dl className="mt-10 grid grid-cols-3 border-l border-t border-white/20 bg-[#0a0d0b]">
+              {[
+                [process.pagesProcessed, "pages processed"],
+                [process.sourceCount, "trusted sources"],
+                [process.claimCount, "linked claims"],
+              ].map(([value, label]) => (
+                <div key={label} className="border-b border-r border-white/20 bg-[#0a0d0b] p-4">
+                  <dd className="text-3xl font-semibold tracking-[-.05em]">{value}</dd>
+                  <dt className="mt-2 text-[10px] font-semibold uppercase tracking-[.15em] text-white/60">{label}</dt>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-6 max-w-xl text-xs leading-relaxed text-white/52">
+              Public output includes only the decision brief, claims, sources, and privacy-safe process proof. Team identities, email addresses, message contents, private notes, and webhook records are excluded server-side.
+            </p>
+          </div>
+
+          <div className="flex min-h-[620px] flex-col">
+            <div className="min-h-0 flex-1">
+              <EvidenceGraph
+                nodes={nodes}
+                edges={edges}
+                selectedId={selected?.id ?? null}
+                onSelect={(node) => setSelectedId(node.id)}
+              />
+            </div>
+            {selected && (
+              <article className="mt-4 grid gap-3 border-t border-white/20 pt-4 sm:grid-cols-[130px_1fr]">
+                <p className="eyebrow text-white/60">Selected evidence</p>
+                <div>
+                  <h2 className="text-xl font-semibold tracking-[-.02em]">{selected.label}</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-white/60">{selected.detail}</p>
+                  {selected.url && (
+                    <a href={selected.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-[#c7ff4a]">
+                      Inspect source <ExternalLink className="size-3.5" />
+                    </a>
+                  )}
+                </div>
               </article>
             )}
-          </section>
-          <div className="min-h-[680px]">
-            <EvidenceGraph nodes={nodes} edges={edges} selectedId={selected?.id ?? null} onSelect={(node) => setSelectedId(node.id)} />
+          </div>
+        </section>
+      </div>
+
+      {displayBrief && <DecisionBrief brief={displayBrief} nodes={nodes} edges={edges} />}
+      <ProcessProof process={process} />
+    </main>
+  );
+}
+
+function replaceClaimIds(text: string, nodes: EvidenceNode[]) {
+  const claimNumbers = new Map(
+    nodes
+      .filter((node) => node.kind === "claim")
+      .map((node, index) => [node.id, index + 1] as const),
+  );
+  return text.replace(/\[([^\]]+)\]/g, (match, id: string) => {
+    const number = claimNumbers.get(id);
+    return number === undefined
+      ? match
+      : `[Claim ${String(number).padStart(2, "0")}]`;
+  });
+}
+
+function DecisionBrief({
+  brief,
+  nodes,
+  edges,
+}: {
+  brief: PublicBrief;
+  nodes: EvidenceNode[];
+  edges: EvidenceEdge[];
+}) {
+  const claims = nodes.filter((node) => node.kind === "claim");
+  const sources = new Map(
+    nodes
+      .filter((node) => node.kind === "source")
+      .map((node) => [node.id, node] as const),
+  );
+
+  return (
+    <section id="decision-brief" className="scroll-mt-8 bg-[#f2eee5] px-5 py-20 text-[#111612] md:px-8 lg:px-12 lg:py-28">
+      <div className="mx-auto grid max-w-[1400px] gap-12 lg:grid-cols-[.62fr_1.38fr]">
+        <div>
+          <p className="eyebrow text-[#4d6b31]">Complete decision brief</p>
+          <h2 className="mt-5 text-5xl font-semibold leading-[.92] tracking-[-.055em] md:text-7xl">{brief.title}</h2>
+          <p className="mt-6 max-w-xl text-lg leading-relaxed text-black/65">{brief.summary}</p>
+        </div>
+        <div className="border-t border-black/20 py-2">
+          <Markdown
+            components={{
+              h1: ({ node: _node, ...props }) => <h3 className="border-b border-black/20 pb-4 pt-7 text-2xl font-semibold tracking-[-.03em]" {...props} />,
+              h2: ({ node: _node, ...props }) => <h3 className="border-b border-black/20 pb-4 pt-7 text-2xl font-semibold tracking-[-.03em]" {...props} />,
+              h3: ({ node: _node, ...props }) => <h3 className="border-b border-black/20 pb-4 pt-7 text-xl font-semibold tracking-[-.025em]" {...props} />,
+              p: ({ node: _node, ...props }) => <p className="py-3 text-base leading-[1.75] text-black/72" {...props} />,
+              ul: ({ node: _node, ...props }) => <ul className="my-3 list-disc space-y-2 pl-6 text-base leading-[1.7] text-black/72 marker:text-[#4d6b31]" {...props} />,
+              ol: ({ node: _node, ...props }) => <ol className="my-3 list-decimal space-y-2 pl-6 text-base leading-[1.7] text-black/72 marker:font-semibold marker:text-[#4d6b31]" {...props} />,
+              strong: ({ node: _node, ...props }) => <strong className="font-semibold text-black" {...props} />,
+            }}
+          >
+            {brief.body}
+          </Markdown>
+        </div>
+        <div className="lg:col-start-2">
+          <p className="eyebrow text-[#4d6b31]">Citation index</p>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60">
+            Every citation marker in the brief resolves to a structured claim and its original public source.
+          </p>
+          <ol className="mt-6 border-t border-black/20">
+            {claims.map((claim, index) => {
+              const sourceLinks = edges
+                .filter((edge) => edge.target === claim.id)
+                .map((edge) => sources.get(edge.source))
+                .filter((source): source is EvidenceNode => source !== undefined);
+              return (
+                <li key={claim.id} className="grid gap-3 border-b border-black/20 py-5 md:grid-cols-[92px_1fr]">
+                  <span className="font-mono text-xs font-semibold text-[#4d6b31]">
+                    Claim {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold leading-relaxed">{claim.label}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                      {sourceLinks.map((source) => (
+                        <a key={source.id} href={source.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-[#4d6b31] underline-offset-4 hover:underline">
+                          {source.label} <ExternalLink className="size-3" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProcessProof({ process }: { process: PublicProcess }) {
+  const sponsors = [
+    {
+      name: "Firecrawl",
+      value: `${process.pagesProcessed} pages processed`,
+      detail: "Collected only the trusted, budgeted source set.",
+      verified: process.pagesProcessed > 0,
+    },
+    {
+      name: "OpenAI",
+      value: `${process.claimCount} claims structured`,
+      detail: "Extracted and synthesized source-linked decision evidence.",
+      verified: process.claimCount > 0,
+    },
+    {
+      name: "AgentMail",
+      value:
+        process.verifiedReplyCount > 0
+          ? `${process.verifiedReplyCount} verified ${process.verifiedReplyCount === 1 ? "reply" : "replies"}`
+          : process.deliveryCount > 0
+            ? `${process.deliveryCount} brief ${process.deliveryCount === 1 ? "delivery" : "deliveries"}`
+            : "Ready for team review",
+      detail:
+        process.verifiedReplyCount > 0
+          ? "Delivered the brief and returned signed replies for human review."
+          : process.deliveryCount > 0
+            ? "Delivered the brief; a signed team reply is still pending."
+            : "No brief has been delivered for review yet.",
+      verified: process.deliveryCount > 0,
+    },
+  ];
+
+  return (
+    <section className="px-5 py-20 md:px-8 lg:px-12 lg:py-28">
+      <div className="mx-auto max-w-[1400px]">
+        <div className="grid gap-8 lg:grid-cols-[.7fr_1.3fr]">
+          <div>
+            <p className="eyebrow text-[#c7ff4a]">Verified process</p>
+            <h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.055em] md:text-7xl">The recommendation has receipts.</h2>
+            <p className="mt-6 max-w-md text-sm leading-relaxed text-white/58">
+              Convex keeps collection, synthesis, delivery, and review synchronized in realtime while the public projection reveals no private team data.
+            </p>
+          </div>
+          <div>
+            <div className="grid border-l border-t border-white/20 md:grid-cols-3">
+              {sponsors.map((sponsor) => (
+                <article key={sponsor.name} className="min-h-52 border-b border-r border-white/20 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold">{sponsor.name}</p>
+                    {sponsor.verified ? (
+                      <CheckCircle2 className="size-4 text-[#c7ff4a]" />
+                    ) : (
+                      <span className="size-2 rounded-full border border-white/40" aria-label="Pending" />
+                    )}
+                  </div>
+                  <p className="mt-12 text-2xl font-semibold tracking-[-.035em]">{sponsor.value}</p>
+                  <p className="mt-3 text-xs leading-relaxed text-white/55">{sponsor.detail}</p>
+                </article>
+              ))}
+            </div>
+            <ol className="mt-10 border-t border-white/20">
+              {process.events.map((event, index) => (
+                <li key={`${event.type}-${event.label}-${index}`} className="grid grid-cols-[48px_88px_1fr] gap-4 border-b border-white/20 py-4 text-sm">
+                  <span className="font-mono text-xs text-[#c7ff4a]">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="text-xs uppercase tracking-[.12em] text-white/50">{event.type}</span>
+                  <span>{event.label}</span>
+                </li>
+              ))}
+            </ol>
           </div>
         </div>
       </div>
-    </main>
+    </section>
   );
 }
 
@@ -108,7 +357,7 @@ function GardenLoader() {
   return (
     <div className="grid min-h-screen place-items-center bg-[#0a0d0b] text-white">
       <LoaderCircle className="animate-spin" />
-      <span className="sr-only">Loading garden</span>
+      <span className="sr-only">Loading decision brief</span>
     </div>
   );
 }
@@ -117,8 +366,8 @@ function UnavailableGarden() {
   return (
     <div className="grid min-h-screen place-items-center bg-[#f2eee5] p-6">
       <div className="text-center">
-        <p className="eyebrow">Garden unavailable</p>
-        <h1 className="mt-4 font-editorial text-5xl">This research view is private or revoked.</h1>
+        <p className="eyebrow">Decision unavailable</p>
+        <h1 className="mt-4 font-editorial text-5xl">This research brief is private or revoked.</h1>
         <Link to="/" className="mt-8 inline-flex items-center gap-2 text-sm underline">
           <ArrowLeft className="size-4" /> Return home
         </Link>

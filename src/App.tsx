@@ -1,18 +1,24 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
+import { ConvexProvider, ConvexReactClient, useQuery } from "convex/react";
+import { BrowserRouter, Link, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { ArrowRight, CircleDot, ExternalLink, Menu, Orbit, Radar, ShieldCheck, Sparkles } from "lucide-react";
+import { api } from "../convex/_generated/api";
 import { EvidenceGraph } from "@/components/observatory/EvidenceGraph";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { demoEdges, demoEvents, demoNodes, demoQuestion } from "@/lib/demo-data";
-import type { EvidenceNode } from "@/lib/graph-types";
+import type { EvidenceEdge, EvidenceNode } from "@/lib/graph-types";
 
 const BackendApp = lazy(() => import("@/backend/BackendApp"));
 const PublicGardenPage = lazy(() => import("@/backend/PublicGardenPage"));
 const backendConfigured = Boolean(import.meta.env.VITE_CONVEX_URL);
+const featuredGardenSlug = "what-must-a-small-construction-firm--52a65131";
+const featuredGardenPath = `/garden/${featuredGardenSlug}`;
+const featuredGardenClient = new ConvexReactClient(
+  "https://resilient-salamander-937.convex.cloud",
+);
 
 export default function App() {
   return (
@@ -20,9 +26,16 @@ export default function App() {
       <BrowserRouter>
         <Suspense fallback={<RouteLoader />}>
           <Routes>
-            <Route path="/" element={<LandingPage />} />
+            <Route
+              path="/"
+              element={
+                <ConvexProvider client={featuredGardenClient}>
+                  <LandingPage />
+                </ConvexProvider>
+              }
+            />
             <Route path="/app/*" element={backendConfigured ? <BackendApp /> : <LocalSetupNotice />} />
-            <Route path="/garden/:slug" element={backendConfigured ? <PublicGardenPage /> : <PreviewGarden />} />
+            <Route path="/garden/:slug" element={<PublicGardenRoute />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
@@ -45,7 +58,40 @@ function useStaticMode() {
 }
 
 function LandingPage() {
-  const [selected, setSelected] = useState<EvidenceNode>(demoNodes[4]);
+  const garden = useQuery(api.gardens.getPublic, { slug: featuredGardenSlug });
+  const sourceNodes: EvidenceNode[] =
+    garden?.sources.map((source, index) => ({
+      id: source._id,
+      label: source.title,
+      detail: source.excerpt,
+      kind: "source",
+      status: "supported",
+      confidence: 0.98,
+      url: source.url,
+      x: Math.cos(index * 2.4) * 0.72,
+      y: Math.sin(index * 2.4) * 0.72,
+    })) ?? [];
+  const claimNodes: EvidenceNode[] =
+    garden?.claims.map((claim) => ({
+      id: claim._id,
+      label: claim.summary,
+      detail: claim.text,
+      kind: "claim",
+      status: claim.status,
+      confidence: claim.confidence,
+      x: claim.positionX,
+      y: claim.positionY,
+    })) ?? [];
+  const nodes = [...sourceNodes, ...claimNodes];
+  const edges: EvidenceEdge[] =
+    garden?.links.map((link) => ({
+      id: link._id,
+      source: link.sourceId,
+      target: link.claimId,
+      support: link.support,
+    })) ?? [];
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = nodes.find((node) => node.id === selectedId) ?? nodes[0];
   const [staticMode, setStaticMode] = useStaticMode();
   return (
     <div className="min-h-screen bg-[#f2eee5] text-[#111612]">
@@ -57,62 +103,70 @@ function LandingPage() {
             <div>
               <div className="mb-9 flex items-center gap-3">
                 <Badge variant="outline" className="border-black/30 bg-transparent px-3 py-1 text-[10px] uppercase tracking-[.2em]">Convex All Gas Hackathon</Badge>
-                <span className="text-xs text-black/60">Research, made inspectable</span>
+                <span className="text-xs text-black/60">Decision research, with proof</span>
               </div>
               <h1 className="max-w-[760px] text-[clamp(4.5rem,10vw,9.8rem)] font-semibold leading-[.76] tracking-[-.075em]">
                 Signal<span className="block font-editorial font-normal italic tracking-[-.055em]">Garden</span>
               </h1>
-              <p className="mt-10 max-w-[590px] text-balance text-xl leading-[1.35] tracking-[-.025em] md:text-2xl">Give a small team a question and trusted starting points. Watch a sourced research field emerge—live, bounded, and ready to challenge.</p>
+              <p className="mt-10 max-w-[590px] text-balance text-xl leading-[1.35] tracking-[-.025em] md:text-2xl">Turn a consequential question and trusted sources into a cited brief your team can inspect, challenge, and send for review.</p>
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-3">
-              <Button asChild size="lg" className="h-12 rounded-full bg-[#111612] px-6 text-[#f2eee5] hover:bg-[#263128]"><Link to="/app">Frame a mission <ArrowRight className="size-4" /></Link></Button>
-              <Button asChild variant="outline" size="lg" className="h-12 rounded-full border-black/35 bg-transparent px-6 hover:bg-black/5"><Link to="/garden/preview">Open evidence preview</Link></Button>
+              <Button asChild size="lg" className="h-12 rounded-full bg-[#111612] px-6 text-[#f2eee5] hover:bg-[#263128]"><Link to="/app">Research a decision <ArrowRight className="size-4" /></Link></Button>
+              <Button asChild variant="outline" size="lg" className="h-12 rounded-full border-black/35 bg-transparent px-6 hover:bg-black/5"><Link to={featuredGardenPath}>Open the real bid decision</Link></Button>
             </div>
           </div>
           <div className="flex min-h-[620px] flex-col pt-8 lg:pl-10 lg:pt-0">
             <div className="mb-4 flex items-center justify-between">
-              <div><p className="eyebrow">Live evidence field / 01</p><p className="mt-1 text-sm text-black/58">Official sponsor documentation preview</p></div>
+              <div><p className="eyebrow">Live decision evidence / 01</p><p className="mt-1 text-sm text-black/58">Production construction bid review</p></div>
               <label className="flex cursor-pointer items-center gap-2 text-xs font-medium"><input type="checkbox" checked={staticMode} onChange={(event) => setStaticMode(event.target.checked)} className="accent-[#111612]" />Static mode</label>
             </div>
-            <div className="min-h-0 flex-1"><EvidenceGraph nodes={demoNodes} edges={demoEdges} selectedId={selected.id} onSelect={setSelected} staticMode={staticMode} /></div>
-            <div className="mt-4 grid gap-3 border-t border-black/20 pt-4 sm:grid-cols-[130px_1fr]">
-              <p className="eyebrow">Selected signal</p>
-              <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold tracking-[-.02em]">{selected.label}</h2><StatusDot status={selected.status} /></div><p className="mt-1 max-w-xl text-sm leading-relaxed text-black/60">{selected.detail}</p></div>
+            <div className="min-h-0 flex-1">
+              {garden === undefined ? (
+                <div className="grid h-full min-h-[420px] place-items-center border border-black/20"><Orbit className="animate-spin text-[#4d6b31]" /><span className="sr-only">Loading real production evidence</span></div>
+              ) : garden === null ? (
+                <div className="grid h-full min-h-[420px] place-items-center border border-black/20 p-8 text-center text-sm text-black/60">The production decision is unavailable.</div>
+              ) : (
+                <EvidenceGraph nodes={nodes} edges={edges} selectedId={selected?.id ?? null} onSelect={(node) => setSelectedId(node.id)} staticMode={staticMode} />
+              )}
             </div>
+            {selected && <div className="mt-4 grid gap-3 border-t border-black/20 pt-4 sm:grid-cols-[130px_1fr]">
+              <p className="eyebrow">Selected evidence</p>
+              <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold tracking-[-.02em]">{selected.label}</h2><StatusDot status={selected.status} /></div><p className="mt-1 max-w-xl text-sm leading-relaxed text-black/60">{selected.detail}</p></div>
+            </div>}
           </div>
         </section>
 
         <section className="border-b border-black/20 px-5 py-6 md:px-8 lg:px-12">
           <div className="grid gap-6 lg:grid-cols-[1.1fr_2fr]">
-            <div><p className="eyebrow">Current research question</p><p className="mt-4 max-w-xl font-editorial text-3xl leading-[1.05] tracking-[-.035em] md:text-4xl">{demoQuestion}</p></div>
+            <div><p className="eyebrow">Decision in review</p><p className="mt-4 max-w-xl font-editorial text-3xl leading-[1.05] tracking-[-.035em] md:text-4xl">{garden?.question ?? "Loading the production decision…"}</p></div>
             <div className="grid grid-cols-2 border-l border-t border-black/20 md:grid-cols-4">
-              {[["24", "page budget"], ["04", "trusted domains"], ["07", "evidence objects"], ["00", "hidden citations"]].map(([value, label]) => <div key={label} className="border-b border-r border-black/20 p-5"><p className="text-4xl font-semibold tracking-[-.06em]">{value}</p><p className="mt-2 text-[10px] font-semibold uppercase tracking-[.17em] text-black/60">{label}</p></div>)}
+              {[[garden?.process.pagesProcessed ?? "—", "pages processed"], [garden?.process.sourceCount ?? "—", "trusted sources"], [garden?.process.claimCount ?? "—", "linked claims"], [garden?.process.deliveryCount ?? "—", "brief deliveries"]].map(([value, label]) => <div key={label} className="border-b border-r border-black/20 p-5"><p className="text-4xl font-semibold tracking-[-.06em]">{value}</p><p className="mt-2 text-[10px] font-semibold uppercase tracking-[.17em] text-black/60">{label}</p></div>)}
             </div>
           </div>
         </section>
 
         <section className="px-5 py-20 md:px-8 lg:px-12 lg:py-28">
           <div className="mb-14 flex flex-col justify-between gap-6 md:flex-row md:items-end">
-            <div><p className="eyebrow">The trust stack / 02</p><h2 className="mt-4 max-w-4xl text-5xl font-semibold leading-[.92] tracking-[-.06em] md:text-7xl">A brief is only useful when the team can <span className="font-editorial font-normal italic">interrogate it.</span></h2></div>
-            <p className="max-w-sm text-sm leading-relaxed text-black/58">Every layer exposes its boundaries: what was crawled, what the model inferred, where sources disagree, and which action still needs a person.</p>
+            <div><p className="eyebrow">How it works / 02</p><h2 className="mt-4 max-w-4xl text-5xl font-semibold leading-[.92] tracking-[-.06em] md:text-7xl">A decision brief should always <span className="font-editorial font-normal italic">show its work.</span></h2></div>
+            <p className="max-w-sm text-sm leading-relaxed text-black/58">See exactly what was collected, what the model concluded, where evidence conflicts, and which decision still belongs to a person.</p>
           </div>
           <div className="grid border-l border-t border-black/20 md:grid-cols-3">
-            <Principle number="01" icon={<Radar />} title="Bounded collection" body="Firecrawl missions show page and depth budgets before launch. Expansion is an explicit decision, never invisible spend." />
-            <Principle number="02" icon={<Sparkles />} title="Sourced synthesis" body="OpenAI structured outputs attach each extracted claim to an exact passage before a brief can be assembled." />
-            <Principle number="03" icon={<ShieldCheck />} title="Human control" body="AgentMail replies become verified review items. Scope-changing requests cannot trigger a crawl from an email alone." />
+            <Principle number="01" icon={<Radar />} title="Set the boundary" body="Choose the trusted URLs, page limit, and depth before Firecrawl starts. The research cannot quietly expand its own scope." />
+            <Principle number="02" icon={<Sparkles />} title="Trace every claim" body="OpenAI extracts structured claims and attaches each conclusion to the source passage that supports or challenges it." />
+            <Principle number="03" icon={<ShieldCheck />} title="Review with people" body="AgentMail delivers the brief and turns signed replies into review items. Email can question the work, but it cannot spend or crawl." />
           </div>
         </section>
 
         <section className="bg-[#0a0d0b] px-5 py-20 text-[#f2eee5] md:px-8 lg:px-12 lg:py-28">
           <div className="grid gap-12 lg:grid-cols-[.75fr_1.25fr]">
-            <div><p className="eyebrow text-[#c7ff4a]">A mission, in motion / 03</p><h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.06em] md:text-7xl">Nothing happens offstage.</h2><p className="mt-6 max-w-md text-base leading-relaxed text-white/58">Convex streams each transition to every collaborator. The operational trail is part of the product—not a debug view.</p></div>
-            <ol className="border-t border-white/20">{demoEvents.map((event, index) => <li key={event.time} className="grid grid-cols-[64px_1fr_auto] items-center gap-4 border-b border-white/20 py-5"><span className="font-mono text-xs text-white/52">{event.time}</span><span className="text-lg tracking-[-.02em]">{event.label}</span><span className="text-xs text-[#c7ff4a]">0{index + 1}</span></li>)}</ol>
+            <div><p className="eyebrow text-[#c7ff4a]">Proof of work / 03</p><h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.06em] md:text-7xl">Every step stays visible.</h2><p className="mt-6 max-w-md text-base leading-relaxed text-white/58">Convex streams the bounded crawl, extracted claims, finished brief, and human reply to every collaborator in realtime.</p></div>
+            <ol className="border-t border-white/20">{garden?.process.events.map((event, index) => <li key={`${event.type}-${event.label}-${index}`} className="grid grid-cols-[64px_1fr_auto] items-center gap-4 border-b border-white/20 py-5"><span className="font-mono text-xs uppercase text-white/52">{event.type}</span><span className="text-lg tracking-[-.02em]">{event.label}</span><span className="text-xs text-[#c7ff4a]">{String(index + 1).padStart(2, "0")}</span></li>) ?? <li className="border-b border-white/20 py-5 text-white/55">Loading verified process events…</li>}</ol>
           </div>
         </section>
 
         <section className="px-5 py-20 text-center md:px-8 lg:px-12 lg:py-32">
-          <CircleDot className="mx-auto size-8 text-[#4d6b31]" /><p className="mx-auto mt-6 max-w-5xl font-editorial text-5xl leading-[.95] tracking-[-.045em] md:text-7xl">Research should not arrive as a black box.</p>
-          <Button asChild size="lg" className="mt-10 h-12 rounded-full bg-[#111612] px-7 text-[#f2eee5]"><Link to="/app">Start with the evidence <ArrowRight className="size-4" /></Link></Button>
+          <CircleDot className="mx-auto size-8 text-[#4d6b31]" /><p className="mx-auto mt-6 max-w-5xl font-editorial text-5xl leading-[.95] tracking-[-.045em] md:text-7xl">Know what supports the recommendation—and what still needs a person.</p>
+          <Button asChild size="lg" className="mt-10 h-12 rounded-full bg-[#111612] px-7 text-[#f2eee5]"><Link to={featuredGardenPath}>Inspect the real decision <ArrowRight className="size-4" /></Link></Button>
         </section>
       </main>
       <SiteFooter />
@@ -121,7 +175,7 @@ function LandingPage() {
 }
 
 function SiteHeader() {
-  const links = [["Approach", "/#content"], ["Evidence preview", "/garden/preview"]];
+  const links = [["How it works", "/#content"], ["Real bid decision", featuredGardenPath]];
   return <header className="sticky top-0 z-50 flex h-[72px] items-center justify-between border-b border-black/20 bg-[#f2eee5]/90 px-5 backdrop-blur-xl md:px-8 lg:px-12"><Link to="/" className="flex items-center gap-2.5 font-semibold tracking-[-.025em]"><SignalMark /> Signal Garden</Link><nav aria-label="Primary" className="hidden items-center gap-7 md:flex">{links.map(([label, href]) => <Link key={label} to={href} className="text-sm text-black/60 transition hover:text-black">{label}</Link>)}<Button asChild size="sm" className="rounded-full bg-[#111612] text-[#f2eee5]"><Link to="/app">Open workspace</Link></Button></nav><Sheet><SheetTrigger asChild><Button variant="ghost" size="icon" className="md:hidden" aria-label="Open navigation"><Menu /></Button></SheetTrigger><SheetContent className="bg-[#f2eee5] pt-16"><nav className="flex flex-col gap-5" aria-label="Mobile navigation">{links.map(([label, href]) => <Link key={label} to={href} className="text-2xl font-semibold">{label}</Link>)}<Button asChild className="mt-4 rounded-full"><Link to="/app">Open workspace</Link></Button></nav></SheetContent></Sheet></header>;
 }
 
@@ -131,10 +185,20 @@ function Principle({ number, icon, title, body }: { number: string; icon: ReactN
 
 function StatusDot({ status }: { status: EvidenceNode["status"] }) { return <span className="inline-flex items-center gap-1.5 rounded-full border border-black/20 px-2 py-1 text-[9px] font-semibold uppercase tracking-[.15em]"><span className={`size-1.5 rounded-full ${status === "supported" ? "bg-[#688f40]" : status === "disputed" ? "bg-[#ff6b57]" : "bg-[#708be0]"}`} />{status}</span>; }
 
-function PreviewGarden() { return <LandingPage />; }
+function PublicGardenRoute() {
+  const { slug = "" } = useParams();
+  if (slug === featuredGardenSlug) {
+    return (
+      <ConvexProvider client={featuredGardenClient}>
+        <PublicGardenPage />
+      </ConvexProvider>
+    );
+  }
+  return backendConfigured ? <PublicGardenPage /> : <Navigate to={featuredGardenPath} replace />;
+}
 
-function LocalSetupNotice() { return <div className="flex min-h-screen items-center justify-center bg-[#0a0d0b] p-6 text-[#f2eee5]"><div className="max-w-lg border border-white/20 p-8"><SignalMark /><p className="eyebrow mt-10 text-[#c7ff4a]">Local interface ready</p><h1 className="mt-4 text-5xl font-semibold leading-[.95] tracking-[-.06em]">The workspace needs its isolated Convex deployment.</h1><p className="mt-5 leading-relaxed text-white/58">The visual product is available now. Account-bound collaboration, real crawls, and email remain disabled until the new Signal Garden project is authenticated and confirmed.</p><Button asChild variant="outline" className="mt-8 rounded-full border-white/30 bg-transparent text-white hover:bg-white/10"><Link to="/">Return to preview</Link></Button></div></div>; }
+function LocalSetupNotice() { return <div className="flex min-h-screen items-center justify-center bg-[#0a0d0b] p-6 text-[#f2eee5]"><div className="max-w-lg border border-white/20 p-8"><SignalMark /><p className="eyebrow mt-10 text-[#c7ff4a]">Local interface ready</p><h1 className="mt-4 text-5xl font-semibold leading-[.95] tracking-[-.06em]">Connect this checkout to its dedicated Convex deployment.</h1><p className="mt-5 leading-relaxed text-white/58">Private teams, live crawls, and email review require the isolated Signal Garden backend. The published production decision remains available read-only.</p><Button asChild variant="outline" className="mt-8 rounded-full border-white/30 bg-transparent text-white hover:bg-white/10"><Link to={featuredGardenPath}>Open the real decision</Link></Button></div></div>; }
 
 function SiteFooter() { return <footer className="flex flex-col gap-6 border-t border-black/20 px-5 py-8 text-sm md:flex-row md:items-center md:justify-between md:px-8 lg:px-12"><div className="flex items-center gap-2 font-semibold"><SignalMark /> Signal Garden</div><p className="text-black/60">Built with Convex · OpenAI · Firecrawl · AgentMail · vgpu</p><a href="https://github.com/vercel-labs/vgpu" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-black/60 hover:text-black">GPU instrument details <ExternalLink className="size-3.5" /></a></footer>; }
 
-function RouteLoader() { return <div className="grid min-h-screen place-items-center bg-[#0a0d0b] text-[#f2eee5]"><div className="flex items-center gap-3"><Orbit className="animate-spin text-[#c7ff4a]" /><span className="eyebrow">Tuning the observatory</span></div></div>; }
+function RouteLoader() { return <div className="grid min-h-screen place-items-center bg-[#0a0d0b] text-[#f2eee5]"><div className="flex items-center gap-3"><Orbit className="animate-spin text-[#c7ff4a]" /><span className="eyebrow">Loading the evidence</span></div></div>; }
