@@ -1,18 +1,18 @@
 # Hackathon log
 
-- **Project:** Signal Garden
+- **Project:** Get It in Writing
 - **Event:** Convex All Gas Hackathon
-- **What it does:** Submits one approved website lead form every day and emails the owner if the page, submission, or expected confirmation fails.
+- **What it does:** Checks what an official page actually promises, identifies the consequential gap, gets that exact point confirmed in writing with the user's approval, and preserves the evidence as a private Proof Card.
 - **Live app:** https://resilient-salamander-937.convex.site
 - **Repo:** https://github.com/Joe-Simo/signal-garden-all-gas
 - **Frontend:** Convex static hosting
 - **Convex deployment:** https://resilient-salamander-937.convex.cloud
-- **Components:** @convex-dev/static-hosting
-- **Convex features:** schema, tables, indexes, realtime queries, mutations, actions, HTTP actions, crons, scheduled functions
+- **Components:** @agentmail/convex, @firecrawl/firecrawl-convex, @convex-dev/static-hosting
+- **Convex features:** schema, tables, indexes, realtime queries, mutations, actions, HTTP actions, scheduled functions
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T17:00:20Z
+- **Last updated:** 2026-08-30T19:54:17Z
 
 ## Log
 
@@ -105,3 +105,27 @@ Deployed only `joe-simo/signal-garden-all-gas` to its dedicated development and
 production deployments. Verified a real AgentMail setup delivery, the live app
 and public check, strict lint, 21 focused tests, the production build, and nine
 desktop/mobile Playwright journeys with Axe and keyboard coverage.
+
+### 2026-08-30 - 2d59515
+
+Rebuilt the product as Get It in Writing around one consumer outcome: paste an
+official page, state what must be true, and receive a conservative Reliance Map
+that separates established language from vague or missing commitments. An
+unresolved material point becomes one editable confirmation request; nothing is
+sent until the owner approves the exact recipient and message.
+
+Added private, realtime decision records and Proof Cards, official-source-only
+Firecrawl research, structured OpenAI analysis with verified excerpts, and an
+AgentMail delivery/reply loop with sender matching, delivery reconciliation,
+idempotent inbound handling, and at most one suggested follow-up
+(`convex/decisions.ts`, `convex/research.ts`, `convex/researchOpenAI.ts`,
+`convex/confirmations.ts`, `convex/confirmationOpenAI.ts`).
+
+Replaced the public and signed-in experience with a responsive Promise Wallet
+interface and a reduced-motion, forced-colors-safe WebGPU seal. Deployed the
+new frontend to Convex Static Hosting. A real development run crawled the live
+official page, persisted one source and one conservative assessment, created a
+private confirmation draft, found no official contact, and sent nothing.
+Verified strict lint and type checking, 12 focused tests, 14 browser journeys,
+the production build, shader validation, desktop/mobile layout, accessibility,
+and the no-WebGPU fallback.
