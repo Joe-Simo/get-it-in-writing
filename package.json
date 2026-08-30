@@ -64,5 +64,8 @@
     "typescript": "6.0.2",
     "typescript-eslint": "^8.66.0",
     "vitest": "^4.1.11"
+  },
+  "patchedDependencies": {
+    "@agentmail/convex@0.1.0": "patches/@agentmail%2Fconvex@0.1.0.patch"
   }
 }

@@ -619,6 +619,7 @@ type ConfirmationPanelProps = {
 function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
   const saveDraft = useMutation(api.confirmations.saveDraft);
   const approveAndSend = useMutation(api.confirmations.approveAndSend);
+  const retryApprovedSend = useMutation(api.confirmations.retryApprovedSend);
   const providerStatus = useQuery(
     api.confirmations.sendStatus,
     request.outboundId ? { requestId: request._id } : "skip",
@@ -638,7 +639,9 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
   const [body, setBody] = useState(request.body);
   const [approved, setApproved] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [pending, setPending] = useState<"save" | "send" | null>(null);
+  const [pending, setPending] = useState<
+    "save" | "send" | "retry" | null
+  >(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const editable = [
@@ -656,6 +659,7 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
     (contact) => contact._id === effectiveContactChoice,
   );
   const effectiveRecipient = selectedContact?.email ?? recipient;
+  const providerFailed = providerStatus?.status === "failed";
 
   function markEdited() {
     setDirty(true);
@@ -723,6 +727,29 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
     }
   }
 
+  async function retryDelivery() {
+    setPending("retry");
+    setError("");
+    setNotice("");
+    try {
+      await retryApprovedSend({
+        requestId: request._id,
+        retryExactApprovedMessage: true,
+      });
+      setNotice(
+        "Retry started for the same approved recipient, subject, and message.",
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "The approved request could not be retried",
+      );
+    } finally {
+      setPending(null);
+    }
+  }
+
   return (
     <section className="confirmation-panel ticket-shell">
       <div className="section-heading compact">
@@ -732,7 +759,13 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
               ? "One permitted follow-up"
               : "Written confirmation"}
           </p>
-          <h2>{editable ? "Review the exact request" : "Request sent"}</h2>
+          <h2>
+            {editable
+              ? "Review the exact request"
+              : providerFailed
+                ? "Request not sent"
+                : "Request sent"}
+          </h2>
         </div>
         <Mail />
       </div>
@@ -886,7 +919,9 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
             <Send />
           </span>
           <strong>
-            {providerStatus?.status === "delivered"
+            {providerFailed
+              ? "Not sent"
+              : providerStatus?.status === "delivered"
               ? "Delivered"
               : providerStatus?.status === "sent"
                 ? "Sent"
@@ -899,8 +934,35 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
             <h3>{request.subject}</h3>
             <p className="whitespace-pre-wrap">{request.body}</p>
           </details>
-          {providerStatus?.errorMessage && (
-            <p className="form-error">{providerStatus.errorMessage}</p>
+          {providerFailed && (
+            <div className="mt-5">
+              <p role="alert" className="form-error">
+                The email did not leave the app. The approved recipient and
+                wording are unchanged.
+              </p>
+              {error && (
+                <p role="alert" className="form-error mt-3">
+                  {error}
+                </p>
+              )}
+              {notice && (
+                <p role="status" className="form-notice mt-3">
+                  {notice}
+                </p>
+              )}
+              <Button
+                className="mt-4 h-11 w-full rounded-none bg-cobalt text-white hover:bg-[#153ae8]"
+                disabled={pending !== null}
+                onClick={() => void retryDelivery()}
+              >
+                {pending === "retry" ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <RefreshCw />
+                )}{" "}
+                Retry this approved request
+              </Button>
+            </div>
           )}
         </div>
       )}

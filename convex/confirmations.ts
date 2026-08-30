@@ -276,6 +276,70 @@ export const approveAndSend = mutation({
   },
 });
 
+export const retryApprovedSend = mutation({
+  args: {
+    requestId: v.id("confirmationRequests"),
+    retryExactApprovedMessage: v.literal(true),
+  },
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> => {
+    const request = await requireOwnedRequest(ctx, args.requestId);
+    if (!request.approvedAt || !request.recipient) {
+      throw new Error("Review and approve the exact message before sending");
+    }
+    if (!request.outboundId) {
+      throw new Error("There is no failed delivery to retry");
+    }
+    const priorStatus = await agentmail.status(
+      ctx,
+      request.outboundId as OutboundId,
+    );
+    if (priorStatus?.status !== "failed") {
+      throw new Error("The existing delivery is still active or already sent");
+    }
+    const decision = await ctx.db.get("decisions", request.decisionId);
+    if (decision === null) throw new Error("404: decision not found");
+    const inboxId = process.env.AGENTMAIL_INBOX_ID;
+    if (!inboxId) throw new Error("AgentMail is not configured for this deployment");
+
+    const outboundId: OutboundId = await agentmail.sendMessage(ctx, inboxId, {
+      to: request.recipient,
+      subject: request.subject,
+      text: request.body,
+      labels: ["get-it-in-writing", request.requestToken.toLowerCase()],
+      headers: { "X-Get-It-In-Writing-Request": request.requestToken },
+    });
+    const now = Date.now();
+    await ctx.db.patch("confirmationRequests", request._id, {
+      status: "pending",
+      outboundId,
+      threadId: undefined,
+      messageId: undefined,
+      sentAt: now,
+      deliveredAt: undefined,
+      updatedAt: now,
+    });
+    await ctx.db.patch("decisions", decision._id, {
+      status: "sending",
+      operationalFailure: undefined,
+      operationalMessage: undefined,
+      updatedAt: now,
+    });
+    await ctx.db.insert("decisionEvents", {
+      decisionId: decision._id,
+      fromStatus: decision.status,
+      toStatus: "sending",
+      label: "Retrying the same approved request after a delivery failure",
+      occurredAt: now,
+    });
+    await ctx.scheduler.runAfter(3_000, internal.confirmations.reconcileOutbound, {
+      requestId: request._id,
+      attempt: 0,
+    });
+    return outboundId;
+  },
+});
+
 export const sendStatus = query({
   args: { requestId: v.id("confirmationRequests") },
   returns: v.union(
