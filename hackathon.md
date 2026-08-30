@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T22:18:25Z
+- **Last updated:** 2026-08-30T22:36:30Z
 
 ## Log
 
@@ -203,3 +203,18 @@ coverage to 1440, 1024, 768, and 390 pixel widths. Verified strict lint and type
 checking, 27 unit/integration tests, the production build, and 23 applicable
 browser checks before deploying only `joe-simo/signal-garden-all-gas` to Convex
 Static Hosting.
+
+### 2026-08-30 - f720cc6
+
+Sent the real Abode Malua Bay confirmation request after the owner approved its
+exact source-checked recipient and wording. AgentMail accepted exactly one
+outbound message, and the live private case moved to Sent while it waits for a
+genuine provider reply; no reply or Proof Card is claimed yet.
+
+Added a safe delivery-recovery state that distinguishes Not sent from Sending,
+hides infrastructure details, and retries only the unchanged approved message
+after a confirmed provider failure. Patched the current AgentMail Convex
+component to use Convex's isolated environment-variable mapping, scoped the
+production credential to this app's single inbox, and deployed only
+`joe-simo/signal-garden-all-gas`. Verified strict lint and type checking, 27
+unit/integration tests, the production build, and 23 applicable browser checks.
