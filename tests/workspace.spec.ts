@@ -17,12 +17,14 @@ test("a team can frame and safely cancel a bounded mission", async ({
   await page.getByLabel("Team name").fill(`Evidence Lab ${runId}`);
   await page.getByRole("button", { name: /create private team/i }).click();
   await expect(
-    page.getByRole("heading", { name: "Protect estimator time." }),
+    page.getByRole("heading", { name: "Control every package." }),
   ).toBeVisible();
-  await expect(page.getByText("Deployment readiness")).toBeVisible();
-  await expect(page.getByText("OpenAI", { exact: true })).toBeVisible();
-  await expect(page.getByText("Firecrawl", { exact: true })).toBeVisible();
-  await expect(page.getByText("AgentMail", { exact: true })).toBeVisible();
+  await expect(page.getByText("Control room readiness")).toBeVisible();
+  await expect(page.getByText("Source capture", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Impact extraction", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Reply routing", { exact: true })).toBeVisible();
   await expect(page.getByText("Ready", { exact: true })).toHaveCount(3);
 
   const secondTeamName = `Field Notes ${runId}`;
@@ -36,14 +38,14 @@ test("a team can frame and safely cancel a bounded mission", async ({
   const dashboardResults = await new AxeBuilder({ page }).analyze();
   expect(dashboardResults.violations).toEqual([]);
 
-  await page.getByRole("button", { name: /analyze a solicitation/i }).click();
+  await page.getByRole("button", { name: /track a bid/i }).click();
   await page
     .getByLabel("Opportunity")
     .fill("Public building fire protection upgrade");
   await page
     .getByLabel("Public solicitation URL")
     .fill("https://sam.gov/opp/test-opportunity/view");
-  await page.getByRole("button", { name: /create pre-bid workspace/i }).click();
+  await page.getByRole("button", { name: /create bid control room/i }).click();
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     "Public building fire protection upgrade",
@@ -56,19 +58,19 @@ test("a team can frame and safely cancel a bounded mission", async ({
   ).toBeVisible();
   await expect(page.getByText("No verified replies yet.")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Launch bounded crawl" }),
+    page.getByRole("button", { name: "Capture bid package" }),
   ).toBeEnabled();
 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
 
-  await page.getByRole("button", { name: "Stop research" }).click();
+  await page.getByRole("button", { name: "Stop package capture" }).click();
   await expect(
-    page.getByRole("heading", { name: "Stop this research?" }),
+    page.getByRole("heading", { name: "Stop this package capture?" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Stop workflow" }).click();
   await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Stop research" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "Stop package capture" }),
+  ).toHaveCount(0);
 });

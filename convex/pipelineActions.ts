@@ -13,12 +13,14 @@ import type { StoredSource } from "./pipeline";
 const crawlResponse = z.object({ success: z.boolean(), id: z.string() });
 const crawlPage = z.object({
   markdown: z.string().optional(),
+  links: z.array(z.string()).optional(),
   metadata: z
     .object({
       sourceURL: z.string().optional(),
       url: z.string().optional(),
       title: z.string().optional(),
       description: z.string().optional(),
+      contentType: z.string().optional(),
     })
     .passthrough()
     .optional(),
@@ -28,6 +30,54 @@ const crawlResult = z.object({
   status: z.string().optional(),
   data: z.array(crawlPage).default([]),
 });
+
+const scrapeResult = z.object({
+  success: z.boolean().optional(),
+  data: crawlPage,
+});
+
+function documentKind(url: string, seedUrl: string) {
+  if (url === seedUrl) return "notice" as const;
+  if (/amend(ment)?|sf[-_ ]?30/i.test(url)) return "amendment" as const;
+  if (/\.(pdf|docx?|xlsx?|rtf|txt|csv)(?:$|[?#])/i.test(url)) {
+    return "attachment" as const;
+  }
+  return "reference" as const;
+}
+
+function isPublicDocumentUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      /\.(pdf|docx?|xlsx?|rtf|txt|csv)(?:$|[?#])/i.test(url.href)
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function scrapeDocument(apiKey: string, url: string) {
+  const response = await fetch("https://api.firecrawl.dev/v2/scrape", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url,
+      formats: ["markdown", "links"],
+      parsers: ["pdf"],
+      pdfOptions: { maxPages: 200 },
+      onlyMainContent: true,
+      removeBase64Images: true,
+      blockAds: true,
+    }),
+  });
+  if (!response.ok) return null;
+  const parsed = scrapeResult.safeParse(await response.json());
+  return parsed.success ? parsed.data.data : null;
+}
 
 const claimExtraction = z.object({
   claims: z
@@ -115,7 +165,9 @@ export const submitCrawl = internalAction({
         allowSubdomains: false,
         ignoreRobotsTxt: false,
         scrapeOptions: {
-          formats: ["markdown"],
+          formats: ["markdown", "links"],
+          parsers: ["pdf"],
+          pdfOptions: { maxPages: 200 },
           onlyMainContent: true,
           removeBase64Images: true,
           blockAds: true,
@@ -196,6 +248,10 @@ export const processCrawlJob = internalAction({
       const input = await ctx.runQuery(internal.pipeline.getSynthesisInput, {
         missionId: args.missionId,
       });
+      const seed = await ctx.runQuery(internal.pipeline.getCrawlSeed, {
+        missionId: args.missionId,
+        seedId: args.seedId,
+      });
       if (input.mission.status === "cancelled") return null;
       const response = await fetch(
         `https://api.firecrawl.dev/v2/crawl/${encodeURIComponent(args.crawlJobId)}`,
@@ -211,7 +267,24 @@ export const processCrawlJob = internalAction({
       if (!result.success)
         throw new Error("Firecrawl returned an unsuccessful result");
       const sources: StoredSource[] = [];
-      for (const page of result.data.slice(0, 50)) {
+      const primaryPages = result.data.slice(0, seed.pageLimit);
+      const documentUrls = [
+        ...new Set(
+          primaryPages
+            .flatMap((page) => page.links ?? [])
+            .filter(isPublicDocumentUrl),
+        ),
+      ].slice(0, Math.max(0, seed.pageLimit - primaryPages.length));
+      const documents: Array<{ page: z.infer<typeof crawlPage>; parentUrl: string }> = [];
+      for (const documentUrl of documentUrls) {
+        const page = await scrapeDocument(firecrawlKey, documentUrl);
+        if (page !== null) documents.push({ page, parentUrl: seed.url });
+      }
+      const pages = [
+        ...primaryPages.map((page) => ({ page, parentUrl: undefined })),
+        ...documents,
+      ];
+      for (const { page, parentUrl } of pages) {
         const content = page.markdown?.slice(0, 180_000) ?? "";
         const url = page.metadata?.sourceURL ?? page.metadata?.url;
         if (!url || content.length < 80) continue;
@@ -228,6 +301,14 @@ export const processCrawlJob = internalAction({
             .update("\0")
             .update(content)
             .digest("hex"),
+          kind: documentKind(url, seed.url),
+          ...(page.metadata?.contentType === undefined
+            ? {}
+            : { contentType: page.metadata.contentType }),
+          ...(!/\.(pdf|docx?|xlsx?|rtf|txt|csv)(?:$|[?#])/i.test(url)
+            ? {}
+            : { fileName: decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "Attachment") }),
+          ...(parentUrl === undefined ? {} : { parentUrl }),
           claims,
         });
       }

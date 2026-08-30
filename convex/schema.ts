@@ -73,6 +73,15 @@ export default defineSchema({
       v.union(v.literal("undecided"), v.literal("bid"), v.literal("no_bid")),
     ),
     decisionRationale: v.optional(v.string()),
+    reviewState: v.optional(
+      v.union(v.literal("current"), v.literal("change_detected")),
+    ),
+    lastPackageCheckedAt: v.optional(v.number()),
+    releaseState: v.optional(
+      v.union(v.literal("blocked"), v.literal("ready"), v.literal("approved")),
+    ),
+    releaseApprovedAt: v.optional(v.number()),
+    releaseApprovedBy: v.optional(v.id("users")),
     status: missionStatus,
     pageBudget: v.number(),
     depth: v.number(),
@@ -104,6 +113,17 @@ export default defineSchema({
     excerpt: v.string(),
     content: v.string(),
     sourceHash: v.string(),
+    kind: v.optional(
+      v.union(
+        v.literal("notice"),
+        v.literal("attachment"),
+        v.literal("amendment"),
+        v.literal("reference"),
+      ),
+    ),
+    fileName: v.optional(v.string()),
+    contentType: v.optional(v.string()),
+    parentUrl: v.optional(v.string()),
     retrievedAt: v.number(),
   })
     .index("by_missionId", ["missionId"])
@@ -188,6 +208,132 @@ export default defineSchema({
     .index("by_missionId", ["missionId"])
     .index("by_missionId_and_status", ["missionId", "status"])
     .index("by_claimId", ["claimId"]),
+  constructionOverrides: defineTable({
+    missionId: v.id("missions"),
+    ruleKey: v.string(),
+    status: v.union(v.literal("resolved"), v.literal("not_applicable")),
+    ownerLabel: v.optional(v.string()),
+    note: v.optional(v.string()),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+  })
+    .index("by_missionId", ["missionId"])
+    .index("by_missionId_and_ruleKey", ["missionId", "ruleKey"]),
+  missionWatches: defineTable({
+    missionId: v.id("missions"),
+    teamId: v.id("teams"),
+    recipientEmail: v.string(),
+    enabled: v.boolean(),
+    frequency: v.literal("daily"),
+    lastSourceHash: v.optional(v.string()),
+    lastCheckedAt: v.optional(v.number()),
+    nextCheckAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_missionId", ["missionId"])
+    .index("by_enabled_and_nextCheckAt", ["enabled", "nextCheckAt"]),
+  changeEvents: defineTable({
+    missionId: v.id("missions"),
+    watchId: v.id("missionWatches"),
+    previousHash: v.optional(v.string()),
+    currentHash: v.string(),
+    summary: v.string(),
+    previousSnapshotId: v.optional(v.id("packageSnapshots")),
+    currentSnapshotId: v.optional(v.id("packageSnapshots")),
+    addedText: v.optional(v.string()),
+    removedText: v.optional(v.string()),
+    status: v.union(v.literal("detected"), v.literal("reviewed")),
+    detectedAt: v.number(),
+    notifiedAt: v.optional(v.number()),
+  })
+    .index("by_missionId", ["missionId"])
+    .index("by_watchId", ["watchId"])
+    .index("by_watchId_and_status", ["watchId", "status"]),
+  packageSnapshots: defineTable({
+    missionId: v.id("missions"),
+    watchId: v.id("missionWatches"),
+    version: v.number(),
+    sourceHash: v.string(),
+    markdown: v.string(),
+    linkInventory: v.array(v.string()),
+    trigger: v.union(
+      v.literal("baseline"),
+      v.literal("scheduled"),
+      v.literal("manual"),
+    ),
+    capturedAt: v.number(),
+  })
+    .index("by_missionId", ["missionId"])
+    .index("by_watchId", ["watchId"])
+    .index("by_missionId_and_version", ["missionId", "version"]),
+  changeImpacts: defineTable({
+    missionId: v.id("missions"),
+    changeEventId: v.id("changeEvents"),
+    title: v.string(),
+    detail: v.string(),
+    area: v.union(
+      v.literal("deadline"),
+      v.literal("scope"),
+      v.literal("pricing"),
+      v.literal("trade"),
+      v.literal("forms"),
+      v.literal("bonding"),
+      v.literal("schedule"),
+      v.literal("site_access"),
+      v.literal("other"),
+    ),
+    severity: v.union(
+      v.literal("blocking"),
+      v.literal("high"),
+      v.literal("standard"),
+    ),
+    status: v.union(
+      v.literal("open"),
+      v.literal("waiting"),
+      v.literal("cleared"),
+      v.literal("not_applicable"),
+    ),
+    blocksRelease: v.boolean(),
+    sourceQuote: v.string(),
+    ownerLabel: v.optional(v.string()),
+    resolutionNote: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_missionId", ["missionId"])
+    .index("by_changeEventId", ["changeEventId"])
+    .index("by_missionId_and_status", ["missionId", "status"]),
+  bidContacts: defineTable({
+    teamId: v.id("teams"),
+    name: v.string(),
+    email: v.string(),
+    trade: v.string(),
+    company: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_teamId", ["teamId"])
+    .index("by_teamId_and_email", ["teamId", "email"]),
+  outreachThreads: defineTable({
+    missionId: v.id("missions"),
+    impactId: v.id("changeImpacts"),
+    contactId: v.id("bidContacts"),
+    subject: v.string(),
+    question: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("sent"),
+      v.literal("replied"),
+      v.literal("closed"),
+    ),
+    deliveryId: v.optional(v.id("emailDeliveries")),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_missionId", ["missionId"])
+    .index("by_impactId", ["impactId"])
+    .index("by_contactId", ["contactId"]),
   briefs: defineTable({
     missionId: v.id("missions"),
     teamId: v.id("teams"),
@@ -219,6 +365,9 @@ export default defineSchema({
       v.literal("claim"),
       v.literal("brief"),
       v.literal("email"),
+      v.literal("watch"),
+      v.literal("release"),
+      v.literal("impact"),
     ),
     label: v.string(),
     detail: v.optional(v.string()),
@@ -227,7 +376,12 @@ export default defineSchema({
   emailDeliveries: defineTable({
     teamId: v.id("teams"),
     missionId: v.id("missions"),
-    briefId: v.id("briefs"),
+    briefId: v.optional(v.id("briefs")),
+    purpose: v.optional(
+      v.union(v.literal("brief"), v.literal("impact_followup")),
+    ),
+    impactId: v.optional(v.id("changeImpacts")),
+    contactId: v.optional(v.id("bidContacts")),
     recipientEmail: v.string(),
     inboxId: v.string(),
     messageId: v.string(),

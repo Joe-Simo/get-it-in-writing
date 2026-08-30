@@ -25,6 +25,13 @@ const missionSummary = v.object({
   decision: v.optional(
     v.union(v.literal("undecided"), v.literal("bid"), v.literal("no_bid")),
   ),
+  releaseState: v.optional(
+    v.union(v.literal("blocked"), v.literal("ready"), v.literal("approved")),
+  ),
+  reviewState: v.optional(
+    v.union(v.literal("current"), v.literal("change_detected")),
+  ),
+  lastPackageCheckedAt: v.optional(v.number()),
   status: missionStatus,
   pageBudget: v.number(),
   depth: v.number(),
@@ -351,6 +358,15 @@ export const list = query({
       ...(mission.agency === undefined ? {} : { agency: mission.agency }),
       ...(mission.bidDueAt === undefined ? {} : { bidDueAt: mission.bidDueAt }),
       ...(mission.decision === undefined ? {} : { decision: mission.decision }),
+      ...(mission.releaseState === undefined
+        ? {}
+        : { releaseState: mission.releaseState }),
+      ...(mission.reviewState === undefined
+        ? {}
+        : { reviewState: mission.reviewState }),
+      ...(mission.lastPackageCheckedAt === undefined
+        ? {}
+        : { lastPackageCheckedAt: mission.lastPackageCheckedAt }),
       status: mission.status,
       pageBudget: mission.pageBudget,
       depth: mission.depth,

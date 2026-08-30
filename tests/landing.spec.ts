@@ -6,10 +6,13 @@ test("landing page tells the product story and remains accessible", async ({
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(
-    page.getByRole("heading", { level: 1, name: /know what kills the bid/i }),
+    page.getByRole("heading", {
+      level: 1,
+      name: /never price a stale package/i,
+    }),
   ).toBeVisible();
   await expect(
-    page.getByText("Pre-bid readiness for small federal contractors"),
+    page.getByText("For construction estimating teams"),
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
@@ -31,7 +34,7 @@ test("reduced motion opens the real evidence field in static mode", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(
-    page.getByRole("checkbox", { name: "Static mode" }),
+    page.getByRole("checkbox", { name: "Static graph" }),
   ).toBeChecked();
 });
 
@@ -46,18 +49,15 @@ test("evidence selection and static mode are operable", async ({ page }) => {
   await source.click();
   await expect(source).toHaveAttribute("aria-pressed", "true");
   await expect(
-    page.getByRole("heading", {
-      level: 2,
-      name: /construction of fire protection system/i,
-    }),
+    page.getByRole("heading", { level: 3, name: /sam\.gov/i }),
   ).toBeVisible();
 
-  const staticMode = page.getByRole("checkbox", { name: "Static mode" });
+  const staticMode = page.getByRole("checkbox", { name: "Static graph" });
   await staticMode.check();
   await expect(staticMode).toBeChecked();
 });
 
-test("the real public decision leads with a complete brief and sponsor proof", async ({
+test("the real public bid leads with a release gate and source trace", async ({
   page,
 }) => {
   await page.goto("/garden/should-we-bid-on-the-construction-of-86cb535e", {
@@ -77,14 +77,22 @@ test("the real public decision leads with a complete brief and sponsor proof", a
   await expect(page.getByText("11", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("3", { exact: true }).first()).toBeVisible();
   await expect(
-    page.getByText("Offer guarantee", { exact: true }),
+    page.getByRole("heading", { name: "Offer guarantee", exact: true }).first(),
   ).toBeVisible();
   await expect(
     page.getByText("Complete decision brief", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Firecrawl", { exact: true })).toBeVisible();
-  await expect(page.getByText("OpenAI", { exact: true })).toBeVisible();
-  await expect(page.getByText("AgentMail", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /current, source-backed blockers/i }),
+  ).toBeVisible();
+  await expect(page.getByText("Versioned operating record")).toBeVisible();
+  await expect(
+    page.getByText("Package capture", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Requirement trace", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Review loop", { exact: true })).toBeVisible();
   await expect(
     page.getByText(/email addresses, message contents, private notes/i),
   ).toBeVisible();

@@ -2,17 +2,17 @@
 
 - **Project:** Signal Garden
 - **Event:** Convex All Gas Hackathon
-- **What it does:** Turns a federal construction solicitation into a source-linked compliance matrix so small contractors can find bid killers, assign readiness work, and make a human bid/no-bid decision before pricing.
+- **What it does:** Watches live construction bid packages, versions every source change, routes amendment impacts to owners, and blocks release to estimating until the requirements are cleared.
 - **Live app:** https://resilient-salamander-937.convex.site
 - **Repo:** https://github.com/Joe-Simo/signal-garden-all-gas
 - **Frontend:** Convex static hosting
 - **Convex deployment:** https://resilient-salamander-937.convex.cloud
 - **Components:** @convex-dev/static-hosting, @convex-dev/workflow
-- **Convex features:** schema, tables, indexes, realtime queries, mutations, actions, HTTP actions, scheduled functions
+- **Convex features:** schema, tables, indexes, realtime queries, mutations, actions, HTTP actions, crons, scheduled functions
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna, gpt-5.6-terra
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T04:09:12Z
+- **Last updated:** 2026-08-30T14:36:46Z
 
 ## Log
 
@@ -67,13 +67,20 @@ reply. Added owner-only review-route settings and recipient authorization tests
 
 ### 2026-08-30 - working tree
 
-Rebuilt Signal Garden as a pre-bid readiness workspace for small federal
-construction contractors. A real active Navy solicitation now produces 11
-source-linked requirements, a compliance matrix, human-owned bid/no-bid status,
-and a brief that flags a conflicting site-visit attendee deadline instead of
-inventing certainty. Added indexed Convex requirements, authenticated updates,
-privacy-safe public projections, and focused tests; lint, 19 tests, production
-build, and all three WebGPU shader checks pass.
+Turned Signal Garden into recurring bid-package change control rather than a
+one-time AI report. Every check now records an immutable package version,
+extracts exact added and removed source text, routes amendment impacts to human
+owners, tracks external follow-ups and replies, and independently recomputes a
+release gate before estimating can proceed. A real production solicitation is
+on version 1 with daily monitoring and six honestly unresolved release holds
+(`convex/watches.ts`, `convex/release.ts`, `convex/outreach.ts`).
+
+Rebuilt the public site and private control room around the live package,
+impact, ownership, and release workflow. Verified 25 focused tests, strict
+lint and type checking, the production build, all three WebGPU shaders, eight
+desktop/mobile accessibility journeys, and one authenticated development
+control-room journey per viewport without sending a crawl or email from the
+tests.
 
 Public readiness brief:
 https://resilient-salamander-937.convex.site/garden/should-we-bid-on-the-construction-of-86cb535e

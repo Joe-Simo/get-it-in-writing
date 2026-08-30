@@ -119,6 +119,21 @@ export const acceptAgentMail = internalMutation({
         "Pending review in Signal Garden; no crawl was started automatically.",
       createdAt: Date.now(),
     });
+    if (delivery.purpose === "impact_followup") {
+      const threads = await ctx.db
+        .query("outreachThreads")
+        .withIndex("by_missionId", (q) => q.eq("missionId", delivery.missionId))
+        .take(100);
+      const outreach = threads.find(
+        (thread) => thread.deliveryId === delivery._id,
+      );
+      if (outreach !== undefined) {
+        await ctx.db.patch("outreachThreads", outreach._id, {
+          status: "replied",
+          updatedAt: Date.now(),
+        });
+      }
+    }
     return true;
   },
 });

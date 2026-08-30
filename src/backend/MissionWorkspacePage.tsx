@@ -4,11 +4,16 @@ import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
+  BellRing,
   CheckCircle2,
   CircleAlert,
   ClipboardCopy,
+  Download,
   ExternalLink,
   FileCheck2,
+  FileDiff,
+  FileSpreadsheet,
+  FileText,
   Globe2,
   ListChecks,
   LoaderCircle,
@@ -16,6 +21,9 @@ import {
   NotebookPen,
   Send,
   ShieldCheck,
+  ShieldAlert,
+  LockKeyhole,
+  RefreshCw,
   UserRoundCheck,
   XCircle,
 } from "lucide-react";
@@ -44,7 +52,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import type { EvidenceEdge, EvidenceNode } from "@/lib/graph-types";
+import {
+  downloadReadinessBrief,
+  downloadReadinessWorkbook,
+} from "@/lib/readinessExport";
 import { WorkspaceLoader } from "@/backend/WorkspaceLoader";
 
 export default function MissionWorkspacePage() {
@@ -52,6 +65,12 @@ export default function MissionWorkspacePage() {
   const id = missionId as Id<"missions">;
   const data = useQuery(api.missions.getWorkspace, { missionId: id });
   const readiness = useQuery(api.readiness.forMission, { missionId: id });
+  const constructionChecks = useQuery(api.construction.forMission, {
+    missionId: id,
+  });
+  const watch = useQuery(api.watches.forMission, { missionId: id });
+  const releaseControl = useQuery(api.release.forMission, { missionId: id });
+  const outreach = useQuery(api.outreach.forMission, { missionId: id });
   const startMission = useMutation(api.pipeline.start);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -125,7 +144,7 @@ export default function MissionWorkspacePage() {
           to="/app"
           className="flex items-center gap-2 text-sm text-white/55 hover:text-white"
         >
-          <ArrowLeft className="size-4" /> All decisions
+          <ArrowLeft className="size-4" /> All bids
         </Link>
         <Badge
           variant="outline"
@@ -133,13 +152,13 @@ export default function MissionWorkspacePage() {
         >
           {data.mission.status}
         </Badge>
-        <span className="text-xs text-white/60">Pre-bid readiness</span>
+        <span className="text-xs text-white/60">Bid control room</span>
       </header>
       <main className="grid min-h-[calc(100vh-70px)] lg:grid-cols-[minmax(0,1fr)_390px]">
         <section className="flex min-h-[720px] flex-col p-4 md:p-6">
           <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <p className="eyebrow text-[#c7ff4a]">Opportunity readiness</p>
+              <p className="eyebrow text-[#c7ff4a]">Active bid</p>
               <h1 className="mt-3 max-w-4xl text-3xl font-semibold leading-tight tracking-[-.045em] md:text-5xl">
                 {data.mission.opportunityTitle ?? data.mission.question}
               </h1>
@@ -171,7 +190,7 @@ export default function MissionWorkspacePage() {
                   title={
                     readiness?.researchReady === true
                       ? undefined
-                      : "Connect OpenAI and Firecrawl on this deployment before launch"
+                      : "Package capture is not configured for this workspace"
                   }
                   onClick={() => {
                     setError("");
@@ -180,14 +199,14 @@ export default function MissionWorkspacePage() {
                         setError(
                           reason instanceof Error
                             ? reason.message
-                            : "Research could not start",
+                            : "Package capture could not start",
                         ),
                     );
                   }}
                 >
                   {data.mission.status === "failed"
-                    ? "Retry bounded crawl"
-                    : "Launch bounded crawl"}
+                    ? "Retry package capture"
+                    : "Capture bid package"}
                   <ArrowRight />
                 </Button>
               )}
@@ -197,6 +216,14 @@ export default function MissionWorkspacePage() {
                 garden={data.garden}
                 onError={setError}
               />
+              {constructionChecks !== undefined && (
+                <ExportControls
+                  mission={data.mission}
+                  requirements={data.requirements}
+                  checks={constructionChecks}
+                  onError={setError}
+                />
+              )}
               <MissionCancelDialog
                 missionId={id}
                 status={data.mission.status}
@@ -219,7 +246,7 @@ export default function MissionWorkspacePage() {
             >
               <CircleAlert className="mt-0.5 size-4 shrink-0" />
               <div>
-                <p className="font-semibold">Research needs attention</p>
+                <p className="font-semibold">Package capture needs attention</p>
                 <p className="mt-1 leading-relaxed">{data.mission.error}</p>
               </div>
             </div>
@@ -227,8 +254,8 @@ export default function MissionWorkspacePage() {
           {readiness !== undefined && !readiness.researchReady && (
             <div className="mb-4 flex items-center justify-between gap-4 border border-white/25 bg-white/[.03] px-4 py-3 text-sm">
               <span className="text-white/70">
-                OpenAI and Firecrawl must be connected on this isolated
-                deployment before launch.
+                Source capture and extraction must be configured before this bid
+                package can be processed.
               </span>
               <Badge
                 variant="outline"
@@ -238,10 +265,24 @@ export default function MissionWorkspacePage() {
               </Badge>
             </div>
           )}
+          <BidReleaseControl
+            missionId={id}
+            control={releaseControl}
+            outreach={outreach}
+            onError={setError}
+          />
           <OpportunityReadiness
             missionId={id}
             mission={data.mission}
             requirements={data.requirements}
+            constructionChecks={constructionChecks ?? []}
+            onError={setError}
+          />
+          <AmendmentWatch
+            missionId={id}
+            mission={data.mission}
+            watch={watch}
+            reviewEmail={data.reviewEmail}
             onError={setError}
           />
           <div className="mb-3 mt-8 flex items-end justify-between gap-4 border-t border-white/20 pt-6">
@@ -361,7 +402,7 @@ export default function MissionWorkspacePage() {
                     )}
                   />
                   <p className="mt-2 text-xs text-white/60">
-                    Realtime research progress
+                    Live package progress
                   </p>
                 </div>
               )}
@@ -385,6 +426,534 @@ export default function MissionWorkspacePage() {
         </aside>
       </main>
     </div>
+  );
+}
+
+type ReleaseImpact = {
+  _id: Id<"changeImpacts">;
+  changeEventId: Id<"changeEvents">;
+  title: string;
+  detail: string;
+  area:
+    | "deadline"
+    | "scope"
+    | "pricing"
+    | "trade"
+    | "forms"
+    | "bonding"
+    | "schedule"
+    | "site_access"
+    | "other";
+  severity: "blocking" | "high" | "standard";
+  status: "open" | "waiting" | "cleared" | "not_applicable";
+  blocksRelease: boolean;
+  sourceQuote: string;
+  ownerLabel?: string;
+  resolutionNote?: string;
+  updatedAt: number;
+};
+
+type ReleaseControlData = {
+  state: "blocked" | "ready" | "approved";
+  approvedAt?: number;
+  packageVersion: number;
+  lastCapturedAt?: number;
+  blockers: Array<{
+    key: string;
+    kind: "package" | "requirement" | "construction" | "change";
+    title: string;
+    detail: string;
+    ownerLabel?: string;
+  }>;
+  impacts: ReleaseImpact[];
+};
+
+type OutreachSummary = {
+  _id: Id<"outreachThreads">;
+  impactId: Id<"changeImpacts">;
+  contactName: string;
+  contactEmail: string;
+  trade: string;
+  subject: string;
+  question: string;
+  status: "draft" | "sent" | "replied" | "closed";
+  createdAt: number;
+  updatedAt: number;
+};
+
+function BidReleaseControl({
+  missionId,
+  control,
+  outreach,
+  onError,
+}: {
+  missionId: Id<"missions">;
+  control: ReleaseControlData | undefined;
+  outreach: OutreachSummary[] | undefined;
+  onError: (message: string) => void;
+}) {
+  const approve = useMutation(api.release.approve);
+  const reopen = useMutation(api.release.reopen);
+  const [note, setNote] = useState("");
+  const [pending, setPending] = useState(false);
+  const openImpacts =
+    control?.impacts.filter(
+      (impact) => impact.status === "open" || impact.status === "waiting",
+    ) ?? [];
+  const runReleaseAction = (action: "approve" | "reopen") => {
+    setPending(true);
+    onError("");
+    const operation =
+      action === "approve"
+        ? approve({ missionId, note })
+        : reopen({ missionId, note });
+    void operation
+      .then(() => setNote(""))
+      .catch((reason: unknown) =>
+        onError(
+          reason instanceof Error
+            ? reason.message
+            : "The release record could not be updated",
+        ),
+      )
+      .finally(() => setPending(false));
+  };
+
+  return (
+    <section className="mb-6 border border-white/20 bg-[#111512]">
+      <div className="grid border-b border-white/20 lg:grid-cols-[1fr_340px]">
+        <div className="p-5 sm:p-7">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+            <div>
+              <div className="flex items-center gap-2">
+                <LockKeyhole className="size-5 text-[#c7ff4a]" />
+                <p className="eyebrow text-[#c7ff4a]">Bid release gate</p>
+              </div>
+              <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-[-.045em] md:text-4xl">
+                The package is not releasable until every material hold is
+                cleared.
+              </h2>
+            </div>
+            <Badge
+              className={
+                control?.state === "approved"
+                  ? "bg-[#c7ff4a] text-[#111612]"
+                  : control?.state === "ready"
+                    ? "bg-[#f1be55] text-[#111612]"
+                    : "bg-[#ff6b57] text-[#111612]"
+              }
+            >
+              {control?.state ?? "loading"}
+            </Badge>
+          </div>
+          <div className="mt-7 grid grid-cols-3 border-l border-t border-white/20">
+            {[
+              [control?.packageVersion ?? "—", "package version"],
+              [openImpacts.length, "open impacts"],
+              [control?.blockers.length ?? "—", "release holds"],
+            ].map(([value, label]) => (
+              <div
+                key={label}
+                className="border-b border-r border-white/20 p-4"
+              >
+                <p className="text-3xl font-semibold tracking-[-.05em]">
+                  {value}
+                </p>
+                <p className="eyebrow mt-2 text-white/45">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <aside className="border-t border-white/20 p-5 lg:border-l lg:border-t-0">
+          <p className="eyebrow text-white/45">Human release</p>
+          <p className="mt-3 text-sm leading-relaxed text-white/55">
+            Approval is recorded only after the system independently confirms
+            that no release hold remains.
+          </p>
+          <Label htmlFor="release-note" className="mt-5 block text-white/75">
+            Release rationale
+          </Label>
+          <Textarea
+            id="release-note"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder={
+              control?.state === "approved"
+                ? "Why this release must be reopened"
+                : "What was checked before release"
+            }
+            className="mt-2 min-h-24 border-white/25 bg-black/20 text-white placeholder:text-white/30"
+            maxLength={1_000}
+          />
+          {control?.state === "approved" ? (
+            <Button
+              variant="outline"
+              className="mt-3 w-full border-white/25 bg-transparent text-white hover:bg-white/10"
+              disabled={pending || note.trim().length < 4}
+              onClick={() => runReleaseAction("reopen")}
+            >
+              Reopen release
+            </Button>
+          ) : (
+            <Button
+              className="mt-3 w-full bg-[#c7ff4a] text-[#111612] hover:bg-[#d8ff82]"
+              disabled={
+                pending || control?.state !== "ready" || note.trim().length < 8
+              }
+              onClick={() => runReleaseAction("approve")}
+            >
+              {pending ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <ShieldCheck />
+              )}
+              Approve bid release
+            </Button>
+          )}
+          {control?.approvedAt !== undefined && (
+            <p className="mt-3 text-xs text-white/45">
+              Approved {new Date(control.approvedAt).toLocaleString()}
+            </p>
+          )}
+        </aside>
+      </div>
+
+      <div className="grid lg:grid-cols-[.8fr_1.2fr]">
+        <div className="border-b border-white/20 p-5 lg:border-b-0 lg:border-r">
+          <p className="eyebrow text-white/45">Current holds</p>
+          <ol className="mt-4 border-t border-white/15">
+            {control?.blockers.slice(0, 8).map((blocker, index) => (
+              <li
+                key={blocker.key}
+                className="grid grid-cols-[28px_1fr] gap-3 border-b border-white/15 py-4"
+              >
+                <span className="font-mono text-xs text-[#ff9b8b]">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">{blocker.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/45">
+                    {blocker.detail}
+                  </p>
+                  {blocker.ownerLabel && (
+                    <p className="mt-2 text-xs text-[#c7ff4a]">
+                      Owner · {blocker.ownerLabel}
+                    </p>
+                  )}
+                </div>
+              </li>
+            )) ?? (
+              <li className="border-b border-white/15 py-4 text-sm text-white/45">
+                Loading release holds…
+              </li>
+            )}
+            {control !== undefined && control.blockers.length === 0 && (
+              <li className="flex items-center gap-2 border-b border-white/15 py-4 text-sm text-[#c7ff4a]">
+                <CheckCircle2 className="size-4" /> All material holds are
+                clear.
+              </li>
+            )}
+          </ol>
+        </div>
+        <div className="p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="eyebrow text-[#c7ff4a]">Amendment impacts</p>
+              <p className="mt-2 text-sm text-white/50">
+                Exact changed text, its consequence, owner, and reply history.
+              </p>
+            </div>
+            <FileDiff className="size-5 text-[#c7ff4a]" />
+          </div>
+          {control?.impacts.length === 0 ? (
+            <div className="mt-5 border border-dashed border-white/25 p-5">
+              <p className="text-sm font-semibold">No amendment impact yet.</p>
+              <p className="mt-2 text-xs leading-relaxed text-white/45">
+                Capture the package baseline now. The first real public change
+                will create source-linked work here.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-5 space-y-3">
+              {control?.impacts.slice(0, 12).map((impact) => (
+                <ImpactControl
+                  key={impact._id}
+                  missionId={missionId}
+                  impact={impact}
+                  outreach={outreach?.filter(
+                    (thread) => thread.impactId === impact._id,
+                  )}
+                  onError={onError}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ImpactControl({
+  missionId,
+  impact,
+  outreach,
+  onError,
+}: {
+  missionId: Id<"missions">;
+  impact: ReleaseImpact;
+  outreach: OutreachSummary[] | undefined;
+  onError: (message: string) => void;
+}) {
+  const updateImpact = useMutation(api.release.updateImpact);
+  const [status, setStatus] = useState(impact.status);
+  const [ownerLabel, setOwnerLabel] = useState(impact.ownerLabel ?? "");
+  const [resolutionNote, setResolutionNote] = useState(
+    impact.resolutionNote ?? "",
+  );
+  const [pending, setPending] = useState(false);
+  return (
+    <article className="border border-white/20 bg-black/15 p-4">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+          <div className="flex flex-wrap gap-2">
+            <Badge
+              className={
+                impact.status === "cleared" ||
+                impact.status === "not_applicable"
+                  ? "bg-[#c7ff4a] text-[#111612]"
+                  : impact.severity === "blocking"
+                    ? "bg-[#ff6b57] text-[#111612]"
+                    : "bg-[#f1be55] text-[#111612]"
+              }
+            >
+              {impact.status.replace("_", " ")}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="border-white/25 bg-transparent text-white/65"
+            >
+              {impact.area.replace("_", " ")}
+            </Badge>
+          </div>
+          <h3 className="mt-3 text-lg font-semibold tracking-[-.025em]">
+            {impact.title}
+          </h3>
+          <p className="mt-2 text-xs leading-relaxed text-white/50">
+            {impact.detail}
+          </p>
+        </div>
+        <FollowupDialog
+          missionId={missionId}
+          impact={impact}
+          onError={onError}
+        />
+      </div>
+      <blockquote className="mt-4 border-l-2 border-[#c7ff4a]/65 pl-3 text-xs leading-relaxed text-white/60">
+        {impact.sourceQuote}
+      </blockquote>
+      <div className="mt-4 grid gap-2 border-t border-white/15 pt-4 md:grid-cols-[150px_1fr]">
+        <Select
+          value={status}
+          onValueChange={(value) => setStatus(value as ReleaseImpact["status"])}
+        >
+          <SelectTrigger
+            aria-label={`Status for ${impact.title}`}
+            className="border-white/25 bg-black/20 text-white"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="open">Open</SelectItem>
+            <SelectItem value="waiting">Waiting</SelectItem>
+            <SelectItem value="cleared">Cleared</SelectItem>
+            <SelectItem value="not_applicable">Not applicable</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          value={ownerLabel}
+          onChange={(event) => setOwnerLabel(event.target.value)}
+          placeholder="Responsible person or trade"
+          className="border-white/20 bg-black/20 text-white placeholder:text-white/30"
+          maxLength={80}
+        />
+        <Textarea
+          value={resolutionNote}
+          onChange={(event) => setResolutionNote(event.target.value)}
+          placeholder="Required before clearing: what changed in the bid, quote, schedule, or form"
+          className="min-h-20 border-white/20 bg-black/20 text-white placeholder:text-white/30 md:col-span-2"
+          maxLength={1_500}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-white/25 bg-transparent text-white hover:bg-white/10 md:col-span-2"
+          disabled={pending}
+          onClick={() => {
+            setPending(true);
+            onError("");
+            void updateImpact({
+              missionId,
+              impactId: impact._id,
+              status,
+              ownerLabel: ownerLabel || undefined,
+              resolutionNote: resolutionNote || undefined,
+            })
+              .catch((reason: unknown) =>
+                onError(
+                  reason instanceof Error
+                    ? reason.message
+                    : "The amendment impact could not be updated",
+                ),
+              )
+              .finally(() => setPending(false));
+          }}
+        >
+          {pending ? <LoaderCircle className="animate-spin" /> : "Save impact"}
+        </Button>
+      </div>
+      {outreach !== undefined && outreach.length > 0 && (
+        <ol className="mt-4 border-t border-white/15 pt-3">
+          {outreach.map((thread) => (
+            <li
+              key={thread._id}
+              className="flex items-center justify-between gap-3 py-1 text-xs text-white/55"
+            >
+              <span>
+                {thread.contactName} · {thread.trade}
+              </span>
+              <Badge
+                variant="outline"
+                className="border-white/20 bg-transparent text-white/60"
+              >
+                {thread.status}
+              </Badge>
+            </li>
+          ))}
+        </ol>
+      )}
+    </article>
+  );
+}
+
+function FollowupDialog({
+  missionId,
+  impact,
+  onError,
+}: {
+  missionId: Id<"missions">;
+  impact: ReleaseImpact;
+  onError: (message: string) => void;
+}) {
+  const sendFollowup = useAction(api.outreachActions.sendFollowup);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [trade, setTrade] = useState("");
+  const [question, setQuestion] = useState(
+    `Can you confirm how this package change affects your scope, price, and lead time?`,
+  );
+  const [pending, setPending] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 border-white/25 bg-transparent text-white hover:bg-white/10"
+        >
+          <Send /> Ask responsible contact
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="border-black/20 bg-[#f2eee5] text-[#111612] sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="text-3xl tracking-[-.04em]">
+            Route this bid impact.
+          </DialogTitle>
+          <DialogDescription>
+            The message includes the exact changed source passage. A reply is
+            linked back to this impact.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor={`contact-name-${impact._id}`}>Contact name</Label>
+            <Input
+              id={`contact-name-${impact._id}`}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-2"
+              maxLength={80}
+            />
+          </div>
+          <div>
+            <Label htmlFor={`contact-email-${impact._id}`}>Email</Label>
+            <Input
+              id={`contact-email-${impact._id}`}
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="mt-2"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor={`contact-trade-${impact._id}`}>Trade or role</Label>
+            <Input
+              id={`contact-trade-${impact._id}`}
+              value={trade}
+              onChange={(event) => setTrade(event.target.value)}
+              className="mt-2"
+              placeholder="Concrete, electrical, bonding, estimating…"
+              maxLength={80}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor={`contact-question-${impact._id}`}>Question</Label>
+            <Textarea
+              id={`contact-question-${impact._id}`}
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              className="mt-2 min-h-28"
+              maxLength={2_000}
+            />
+          </div>
+        </div>
+        <Button
+          className="w-full rounded-full"
+          disabled={
+            pending ||
+            name.trim().length < 2 ||
+            !email.includes("@") ||
+            trade.trim().length < 2 ||
+            question.trim().length < 8
+          }
+          onClick={() => {
+            setPending(true);
+            onError("");
+            void sendFollowup({
+              missionId,
+              impactId: impact._id,
+              name,
+              email,
+              trade,
+              question,
+            })
+              .then(() => setOpen(false))
+              .catch((reason: unknown) =>
+                onError(
+                  reason instanceof Error
+                    ? reason.message
+                    : "The follow-up could not be sent",
+                ),
+              )
+              .finally(() => setPending(false));
+          }}
+        >
+          {pending ? <LoaderCircle className="animate-spin" /> : <Send />}
+          Send and track reply
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -420,6 +989,10 @@ type PrebidRequirement = {
 };
 
 type PrebidMission = {
+  opportunityTitle?: string;
+  solicitationNumber?: string;
+  agency?: string;
+  solicitationUrl?: string;
   status: MissionStatus;
   workflowKind?: "research" | "prebid";
   bidDueAt?: number;
@@ -427,15 +1000,38 @@ type PrebidMission = {
   decisionRationale?: string;
 };
 
+type ConstructionCheck = {
+  ruleKey: string;
+  label: string;
+  category:
+    | "package"
+    | "submission"
+    | "eligibility"
+    | "bonding"
+    | "labor"
+    | "site_visit"
+    | "schedule"
+    | "safety"
+    | "commercial";
+  severity: "blocking" | "high" | "standard";
+  explanation: string;
+  status: "verified" | "unverified" | "resolved" | "not_applicable";
+  sourceVerified: boolean;
+  ownerLabel?: string;
+  note?: string;
+};
+
 function OpportunityReadiness({
   missionId,
   mission,
   requirements,
+  constructionChecks,
   onError,
 }: {
   missionId: Id<"missions">;
   mission: PrebidMission;
   requirements: PrebidRequirement[];
+  constructionChecks: ConstructionCheck[];
   onError: (message: string) => void;
 }) {
   const setDecision = useMutation(api.requirements.setDecision);
@@ -456,6 +1052,9 @@ function OpportunityReadiness({
       requirement.status !== "satisfied" &&
       requirement.status !== "not_applicable",
   ).length;
+  const unverifiedBlockingChecks = constructionChecks.filter(
+    (check) => check.severity === "blocking" && check.status === "unverified",
+  ).length;
   const readinessPercent =
     requirements.length === 0
       ? 0
@@ -470,7 +1069,7 @@ function OpportunityReadiness({
       requirement.status === "missing",
   )
     ? "No-bid risk"
-    : openDisqualifiers > 0
+    : openDisqualifiers > 0 || unverifiedBlockingChecks > 0
       ? "Hold before pricing"
       : requirements.length > 0 && resolved === requirements.length
         ? "Ready for human decision"
@@ -500,7 +1099,10 @@ function OpportunityReadiness({
         {[
           [posture, "current posture"],
           [String(readinessPercent) + "%", "requirements resolved"],
-          [String(openDisqualifiers), "open disqualifiers"],
+          [
+            String(openDisqualifiers + unverifiedBlockingChecks),
+            "blocking items",
+          ],
           [
             daysRemaining === null
               ? "Not set"
@@ -519,6 +1121,14 @@ function OpportunityReadiness({
           </div>
         ))}
       </div>
+
+      {constructionChecks.length > 0 && (
+        <ConstructionRulepack
+          missionId={missionId}
+          checks={constructionChecks}
+          onError={onError}
+        />
+      )}
 
       <div className="grid xl:grid-cols-[minmax(0,1fr)_310px]">
         <div className="p-4 sm:p-6">
@@ -657,6 +1267,492 @@ function OpportunityReadiness({
         </aside>
       </div>
     </section>
+  );
+}
+
+function ConstructionRulepack({
+  missionId,
+  checks,
+  onError,
+}: {
+  missionId: Id<"missions">;
+  checks: ConstructionCheck[];
+  onError: (message: string) => void;
+}) {
+  const verified = checks.filter(
+    (check) =>
+      check.status === "verified" ||
+      check.status === "resolved" ||
+      check.status === "not_applicable",
+  ).length;
+  const blocking = checks.filter(
+    (check) => check.severity === "blocking" && check.status === "unverified",
+  ).length;
+
+  return (
+    <section className="border-b border-white/20 bg-[#101510] p-4 sm:p-6">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div>
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="size-5 text-[#c7ff4a]" />
+            <p className="eyebrow text-[#c7ff4a]">
+              Federal construction rulepack
+            </p>
+          </div>
+          <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-[-.045em]">
+            Prove package coverage before estimator time is committed.
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/55">
+            “Verified” means the authorized package contains evidence.
+            “Unverified” means the team still needs the source or proof—it does
+            not mean the solicitation necessarily requires the item.
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-3xl font-semibold tracking-[-.05em]">
+            {verified}/{checks.length}
+          </p>
+          <p className="eyebrow mt-1 text-white/45">checks resolved</p>
+          {blocking > 0 && (
+            <p className="mt-2 text-xs text-[#ff9b8b]">
+              {blocking} blocking check{blocking === 1 ? "" : "s"} unverified
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="mt-6 grid gap-3 xl:grid-cols-2">
+        {checks.map((check) => (
+          <ConstructionCheckRow
+            key={check.ruleKey}
+            missionId={missionId}
+            check={check}
+            onError={onError}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ConstructionCheckRow({
+  missionId,
+  check,
+  onError,
+}: {
+  missionId: Id<"missions">;
+  check: ConstructionCheck;
+  onError: (message: string) => void;
+}) {
+  const setOverride = useMutation(api.construction.setOverride);
+  const clearOverride = useMutation(api.construction.clearOverride);
+  const [ownerLabel, setOwnerLabel] = useState(check.ownerLabel ?? "");
+  const [note, setNote] = useState(check.note ?? "");
+  const [status, setStatus] = useState<"resolved" | "not_applicable">(
+    check.status === "not_applicable" ? "not_applicable" : "resolved",
+  );
+  const [pending, setPending] = useState(false);
+  const overridden =
+    check.status === "resolved" || check.status === "not_applicable";
+
+  return (
+    <article className="border border-white/20 bg-black/15 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              className={
+                check.status === "verified" || check.status === "resolved"
+                  ? "bg-[#c7ff4a] text-[#111612]"
+                  : check.status === "not_applicable"
+                    ? "bg-white/15 text-white"
+                    : check.severity === "blocking"
+                      ? "bg-[#ff6b57] text-[#111612]"
+                      : "bg-[#f1be55] text-[#111612]"
+              }
+            >
+              {check.status.replace("_", " ")}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="border-white/25 bg-transparent text-white/65"
+            >
+              {check.severity}
+            </Badge>
+          </div>
+          <h3 className="mt-3 font-semibold tracking-[-.02em]">
+            {check.label}
+          </h3>
+        </div>
+        {check.status === "verified" ? (
+          <CheckCircle2 className="size-5 shrink-0 text-[#c7ff4a]" />
+        ) : (
+          <CircleAlert className="size-5 shrink-0 text-[#f1be55]" />
+        )}
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-white/50">
+        {check.explanation}
+      </p>
+      {(check.status === "unverified" || overridden) && (
+        <div className="mt-4 grid gap-2 border-t border-white/15 pt-4 sm:grid-cols-[130px_1fr]">
+          <Select
+            value={status}
+            onValueChange={(value) =>
+              setStatus(value as "resolved" | "not_applicable")
+            }
+          >
+            <SelectTrigger
+              aria-label={`Resolution for ${check.label}`}
+              className="border-white/25 bg-black/20 text-white"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="resolved">Resolved</SelectItem>
+              <SelectItem value="not_applicable">Not applicable</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            value={ownerLabel}
+            onChange={(event) => setOwnerLabel(event.target.value)}
+            placeholder="Owner (optional)"
+            className="border-white/20 bg-black/20 text-white placeholder:text-white/30"
+            maxLength={80}
+          />
+          <Textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Required: where the team verified this, or why it does not apply"
+            className="min-h-20 border-white/20 bg-black/20 text-white placeholder:text-white/30 sm:col-span-2"
+            maxLength={1_000}
+          />
+          <div className="flex gap-2 sm:col-span-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 border-white/25 bg-transparent text-white hover:bg-white/10"
+              disabled={pending || note.trim().length < 4}
+              onClick={() => {
+                setPending(true);
+                onError("");
+                void setOverride({
+                  missionId,
+                  ruleKey: check.ruleKey,
+                  status,
+                  ownerLabel: ownerLabel || undefined,
+                  note,
+                })
+                  .catch((reason: unknown) =>
+                    onError(
+                      reason instanceof Error
+                        ? reason.message
+                        : "Construction check could not be updated",
+                    ),
+                  )
+                  .finally(() => setPending(false));
+              }}
+            >
+              {pending ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                "Save evidence"
+              )}
+            </Button>
+            {overridden && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-white/60 hover:bg-white/10 hover:text-white"
+                disabled={pending}
+                onClick={() => {
+                  setPending(true);
+                  void clearOverride({ missionId, ruleKey: check.ruleKey })
+                    .catch((reason: unknown) =>
+                      onError(
+                        reason instanceof Error
+                          ? reason.message
+                          : "Construction check could not be reset",
+                      ),
+                    )
+                    .finally(() => setPending(false));
+                }}
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function AmendmentWatch({
+  missionId,
+  mission,
+  watch,
+  reviewEmail,
+  onError,
+}: {
+  missionId: Id<"missions">;
+  mission: PrebidMission;
+  watch:
+    | {
+        watch: {
+          enabled: boolean;
+          frequency: "daily";
+          lastCheckedAt?: number;
+          nextCheckAt: number;
+        } | null;
+        changes: Array<{
+          _id: Id<"changeEvents">;
+          summary: string;
+          status: "detected" | "reviewed";
+          detectedAt: number;
+          notifiedAt?: number;
+        }>;
+      }
+    | undefined;
+  reviewEmail: string | null;
+  onError: (message: string) => void;
+}) {
+  const configure = useMutation(api.watches.configure);
+  const checkNow = useAction(api.watchActions.checkNow);
+  const markReviewed = useMutation(api.watches.markReviewed);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  if (mission.workflowKind !== "prebid" || !mission.solicitationUrl)
+    return null;
+  const enabled = watch?.watch?.enabled ?? false;
+  const openChanges =
+    watch?.changes.filter((change) => change.status === "detected") ?? [];
+
+  return (
+    <section className="mt-6 border border-white/20 bg-[#101510] p-5 sm:p-6">
+      <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
+        <div className="max-w-3xl">
+          <div className="flex items-center gap-2">
+            <BellRing className="size-5 text-[#c7ff4a]" />
+            <p className="eyebrow text-[#c7ff4a]">Amendment watch</p>
+          </div>
+          <h2 className="mt-3 text-2xl font-semibold tracking-[-.035em]">
+            Keep the decision current until the bid closes.
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-white/55">
+            Signal Garden stores a new package version on every check. When the
+            public notice or document inventory changes, exact passages become
+            owned impacts and bid release locks until they are cleared.
+          </p>
+        </div>
+        <div className="flex min-w-[230px] items-center justify-between gap-4 border border-white/20 p-4">
+          <div>
+            <p className="text-sm font-semibold">Daily monitoring</p>
+            <p className="mt-1 text-xs text-white/45">
+              {reviewEmail ? "Approved route ready" : "Review email required"}
+            </p>
+          </div>
+          <Switch
+            aria-label="Daily solicitation amendment monitoring"
+            checked={enabled}
+            disabled={pending || reviewEmail === null}
+            onCheckedChange={(nextEnabled) => {
+              setPending(true);
+              setMessage("");
+              onError("");
+              void configure({ missionId, enabled: nextEnabled })
+                .catch((reason: unknown) =>
+                  onError(
+                    reason instanceof Error
+                      ? reason.message
+                      : "Amendment watch could not be updated",
+                  ),
+                )
+                .finally(() => setPending(false));
+            }}
+          />
+        </div>
+      </div>
+      {enabled && (
+        <div className="mt-5 flex flex-col justify-between gap-3 border-t border-white/15 pt-4 sm:flex-row sm:items-center">
+          <p className="text-xs text-white/50">
+            {watch?.watch?.lastCheckedAt
+              ? `Last verified ${new Date(watch.watch.lastCheckedAt).toLocaleString()}`
+              : "Baseline check pending"}
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-white/25 bg-transparent text-white hover:bg-white/10"
+            disabled={pending}
+            onClick={() => {
+              setPending(true);
+              setMessage("");
+              onError("");
+              void checkNow({ missionId })
+                .then((result) =>
+                  setMessage(
+                    result.changed
+                      ? "A change was detected and the approved reviewer was alerted."
+                      : "The public notice matches the previous verified check.",
+                  ),
+                )
+                .catch((reason: unknown) =>
+                  onError(
+                    reason instanceof Error
+                      ? reason.message
+                      : "The solicitation check could not run",
+                  ),
+                )
+                .finally(() => setPending(false));
+            }}
+          >
+            {pending ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <RefreshCw />
+            )}
+            Check now
+          </Button>
+        </div>
+      )}
+      {message && (
+        <p role="status" className="mt-3 text-sm text-[#c7ff4a]">
+          {message}
+        </p>
+      )}
+      {openChanges.length > 0 && (
+        <ol className="mt-5 space-y-2 border-t border-white/15 pt-4">
+          {openChanges.map((change) => (
+            <li
+              key={change._id}
+              className="flex flex-col justify-between gap-3 border border-[#ff6b57]/40 bg-[#ff6b57]/[.06] p-4 sm:flex-row sm:items-center"
+            >
+              <div>
+                <p className="text-sm font-semibold">Review required</p>
+                <p className="mt-1 text-xs leading-relaxed text-white/55">
+                  {change.summary} ·{" "}
+                  {new Date(change.detectedAt).toLocaleString()}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 border-white/25 bg-transparent text-white hover:bg-white/10"
+                onClick={() =>
+                  void markReviewed({ missionId, changeEventId: change._id })
+                }
+              >
+                Mark reviewed
+              </Button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function ExportControls({
+  mission,
+  requirements,
+  checks,
+  onError,
+}: {
+  mission: PrebidMission;
+  requirements: PrebidRequirement[];
+  checks: ConstructionCheck[];
+  onError: (message: string) => void;
+}) {
+  const [pending, setPending] = useState<"docx" | "xlsx" | null>(null);
+  const [open, setOpen] = useState(false);
+  const data = {
+    opportunityTitle:
+      mission.opportunityTitle ?? "Signal Garden readiness packet",
+    solicitationNumber: mission.solicitationNumber,
+    agency: mission.agency,
+    solicitationUrl: mission.solicitationUrl,
+    decision: mission.decision,
+    decisionRationale: mission.decisionRationale,
+    requirements,
+    checks,
+    generatedAt: new Date(),
+  };
+  const run = (kind: "docx" | "xlsx") => {
+    setPending(kind);
+    onError("");
+    const task =
+      kind === "docx"
+        ? downloadReadinessBrief(data)
+        : downloadReadinessWorkbook(data);
+    void task
+      .catch((reason: unknown) =>
+        onError(
+          reason instanceof Error
+            ? reason.message
+            : "Readiness packet could not be exported",
+        ),
+      )
+      .finally(() => setPending(null));
+  };
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          className="rounded-full border-white/30 bg-transparent text-white hover:bg-white/10"
+        >
+          <Download /> Export packet
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="bg-[#f2eee5] text-[#111612]">
+        <DialogHeader>
+          <DialogTitle className="font-editorial text-4xl font-normal tracking-[-.04em]">
+            Take the readiness record into the bid room.
+          </DialogTitle>
+          <DialogDescription>
+            Both exports preserve source URLs, exact evidence quotes, human
+            statuses, and unverified construction checks.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Button
+            variant="outline"
+            className="h-auto justify-start gap-3 p-4 text-left"
+            disabled={pending !== null}
+            onClick={() => run("xlsx")}
+          >
+            {pending === "xlsx" ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <FileSpreadsheet />
+            )}
+            <span>
+              <span className="block font-semibold">Compliance workbook</span>
+              <span className="mt-1 block text-xs font-normal text-black/55">
+                XLSX for estimators and owners
+              </span>
+            </span>
+          </Button>
+          <Button
+            variant="outline"
+            className="h-auto justify-start gap-3 p-4 text-left"
+            disabled={pending !== null}
+            onClick={() => run("docx")}
+          >
+            {pending === "docx" ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <FileText />
+            )}
+            <span>
+              <span className="block font-semibold">Readiness brief</span>
+              <span className="mt-1 block text-xs font-normal text-black/55">
+                DOCX for review and sign-off
+              </span>
+            </span>
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -857,13 +1953,13 @@ function MissionCancelDialog({
           variant="outline"
           className="rounded-full border-white/30 bg-transparent text-white hover:bg-white/10"
         >
-          <XCircle /> Stop research
+          <XCircle /> Stop package capture
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-[#f2eee5] text-[#111612]">
         <DialogHeader>
           <DialogTitle className="font-editorial text-4xl font-normal tracking-[-.04em]">
-            Stop this research?
+            Stop this package capture?
           </DialogTitle>
           <DialogDescription>
             Signal Garden will cancel the durable workflow and reject late crawl
@@ -1167,8 +2263,8 @@ function ReplyReview({
         )}
       </div>
       <p className="mt-3 text-xs leading-relaxed text-white/50">
-        AgentMail replies require human review. Refresh requests never launch a
-        crawl automatically.
+        Replies remain attached to their bid record and require human review. A
+        reply never changes the package or release state automatically.
       </p>
       {error && (
         <p role="alert" className="mt-3 text-xs text-[#ff9b8b]">
@@ -1260,7 +2356,7 @@ function BriefDeliveryDialog({
           variant="outline"
           className="mt-5 w-full border-white/25 bg-transparent text-white hover:bg-white/10"
         >
-          <Send /> Deliver with AgentMail
+          <Send /> Send to review route
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-[#f2eee5] text-[#111612]">

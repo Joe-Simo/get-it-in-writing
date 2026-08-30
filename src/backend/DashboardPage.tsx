@@ -74,11 +74,11 @@ export default function DashboardPage() {
               First decision
             </Badge>
             <CardTitle className="font-editorial text-5xl font-normal tracking-[-.045em]">
-              Name your decision team.
+              Name your bid team.
             </CardTitle>
             <CardDescription>
-              This creates a private boundary for decisions, sources, and
-              briefs.
+              This creates a private boundary for packages, impacts, contacts,
+              and release records.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -137,7 +137,7 @@ function InvitationAcceptance({
             Private invitation
           </Badge>
           <CardTitle className="font-editorial text-5xl font-normal tracking-[-.045em]">
-            Join the decision team.
+            Join the bid team.
           </CardTitle>
           <CardDescription className="text-white/55">
             Signal Garden will verify that your signed-in email matches the
@@ -190,6 +190,9 @@ type MissionSummary = {
   agency?: string;
   bidDueAt?: number;
   decision?: "undecided" | "bid" | "no_bid";
+  releaseState?: "blocked" | "ready" | "approved";
+  reviewState?: "current" | "change_detected";
+  lastPackageCheckedAt?: number;
   status: string;
   sourceCount: number;
   claimCount: number;
@@ -259,13 +262,13 @@ function TeamDashboard({
       <main className="px-5 py-10 md:px-8 lg:px-12">
         <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div>
-            <p className="eyebrow">Federal construction pre-bid</p>
+            <p className="eyebrow">Live construction bids</p>
             <h1 className="mt-4 text-6xl font-semibold tracking-[-.065em] md:text-8xl">
-              Protect estimator time.
+              Control every package.
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-black/60">
-              Turn each solicitation into a sourced compliance matrix before
-              your team commits days to pricing it.
+              Keep the current solicitation, amendment impacts, trade
+              follow-ups, and bid release in one accountable record.
             </p>
           </div>
           <MissionComposer teamId={team._id} />
@@ -283,7 +286,7 @@ function TeamDashboard({
                   variant="outline"
                   className="border-black/25 bg-transparent"
                 >
-                  {mission.status}
+                  {mission.releaseState ?? mission.status}
                 </Badge>
                 <span className="font-mono text-xs text-black/60">
                   0{index + 1}
@@ -300,8 +303,11 @@ function TeamDashboard({
               </div>
               <div className="mt-6 flex items-center justify-between text-xs text-black/60">
                 <span>
-                  {mission.sourceCount} sources · {mission.claimCount} evidence
-                  claims
+                  {mission.reviewState === "change_detected"
+                    ? "Package change needs review"
+                    : mission.lastPackageCheckedAt
+                      ? `Checked ${new Date(mission.lastPackageCheckedAt).toLocaleDateString()}`
+                      : `${mission.sourceCount} package sources`}
                 </span>
                 <ArrowRight className="size-4 transition group-hover:translate-x-1" />
               </div>
@@ -310,9 +316,9 @@ function TeamDashboard({
           {missions?.length === 0 && (
             <div className="col-span-full bg-[#f2eee5] p-12 text-center">
               <Radar className="mx-auto size-7 text-black/60" />
-              <p className="mt-4 text-lg">No opportunity analyzed yet.</p>
+              <p className="mt-4 text-lg">No bid tracked yet.</p>
               <p className="mt-1 text-sm text-black/60">
-                Start with a public solicitation URL.
+                Start with the live public solicitation.
               </p>
             </div>
           )}
@@ -340,11 +346,12 @@ function TeamReviewRouteDialog({ team }: { team: TeamSummary }) {
       <DialogContent className="bg-[#f2eee5]">
         <DialogHeader>
           <DialogTitle className="font-editorial text-4xl font-normal tracking-[-.04em]">
-            Route briefs to a real reviewer.
+            Set the package review route.
           </DialogTitle>
           <DialogDescription>
-            AgentMail sends research briefs only to this owner-approved address
-            or a signed-in team member. Replies return as verified review items.
+            Package alerts and internal briefs go only to this owner-approved
+            address or a signed-in team member. Replies return to the same bid
+            record.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -429,8 +436,8 @@ function CreateTeamDialog({
             Create another private workspace.
           </DialogTitle>
           <DialogDescription>
-            Each team is an isolated boundary for collaborators, decisions,
-            evidence, and briefs.
+            Each team is an isolated boundary for collaborators, bid packages,
+            contacts, and release records.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -491,24 +498,24 @@ function IntegrationReadiness({ teamId }: { teamId: Id<"teams"> }) {
   const readiness = useQuery(api.readiness.forTeam, { teamId });
   if (readiness === undefined) return null;
 
-  const providers = [
-    ["OpenAI", readiness.openai],
-    ["Firecrawl", readiness.firecrawl],
-    ["AgentMail", readiness.agentMail],
+  const capabilities = [
+    ["Source capture", readiness.firecrawl],
+    ["Impact extraction", readiness.openai],
+    ["Reply routing", readiness.agentMail],
   ] as const;
 
   return (
     <section className="mt-10 grid border border-black/20 lg:grid-cols-[1fr_auto]">
       <div className="p-5 md:p-6">
-        <p className="eyebrow">Deployment readiness</p>
+        <p className="eyebrow">Control room readiness</p>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60">
           {readiness.researchReady
-            ? "Research providers are connected for this deployment."
-            : "Research launch stays locked until OpenAI and Firecrawl are configured on the isolated deployment."}
+            ? "Package capture, change analysis, and follow-up routing are ready."
+            : "New package capture stays locked until the required workspace capabilities are connected."}
         </p>
       </div>
       <div className="grid grid-cols-3 border-t border-black/20 lg:border-l lg:border-t-0">
-        {providers.map(([label, configured]) => (
+        {capabilities.map(([label, configured]) => (
           <div
             key={label}
             className="flex min-w-0 flex-col justify-between border-r border-black/20 p-3 last:border-r-0 sm:p-4"
@@ -550,7 +557,7 @@ function TeamInviteDialog({ teamId }: { teamId: Id<"teams"> }) {
             Invite a collaborator.
           </DialogTitle>
           <DialogDescription>
-            AgentMail sends a private, seven-day link. Only the matching
+            The invite uses a private, seven-day link. Only the matching
             signed-in email can accept it.
           </DialogDescription>
         </DialogHeader>
@@ -603,7 +610,7 @@ function TeamInviteDialog({ teamId }: { teamId: Id<"teams"> }) {
             disabled={pending}
           >
             {pending ? <LoaderCircle className="animate-spin" /> : <Send />}{" "}
-            Send with AgentMail
+            Send private invite
           </Button>
         </form>
         <div className="border-t border-black/20 pt-4">
@@ -637,7 +644,7 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
   const [agency, setAgency] = useState("");
   const [bidDueDate, setBidDueDate] = useState("");
   const [references, setReferences] = useState("");
-  const [pageBudget, setPageBudget] = useState(12);
+  const [pageBudget, setPageBudget] = useState(20);
   const [depth, setDepth] = useState("1");
   const [error, setError] = useState("");
   const seedCount = new Set(
@@ -650,17 +657,18 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="lg" className="rounded-full">
-          <Plus /> Analyze a solicitation
+          <Plus /> Track a bid
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl bg-[#f2eee5]">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl overflow-y-auto bg-[#f2eee5]">
         <DialogHeader>
           <DialogTitle className="font-editorial text-4xl font-normal tracking-[-.04em]">
-            Open a pre-bid workspace.
+            Add a live bid package.
           </DialogTitle>
           <DialogDescription>
-            Signal Garden will read only the public solicitation and references
-            you authorize, then extract a source-linked compliance matrix.
+            Establish the current public package as a controlled baseline. Each
+            requirement stays tied to its exact source passage, and future
+            changes reopen the release gate.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -764,8 +772,9 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
               />
             </div>
             <p className="mt-2 text-xs text-black/60">
-              Use the authoritative notice, bid package, or public procurement
-              page. This becomes the primary evidence boundary.
+              Use the authoritative notice or bid-package page. Signal Garden
+              will capture linked public PDF, Word, and spreadsheet attachments
+              inside the authorized package boundary.
             </p>
           </div>
           <div>
@@ -788,13 +797,14 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
             />
             <p className="mt-2 text-xs text-black/60">
               Up to three references. External discovery stays off; the system
-              cannot quietly broaden the research scope.
+              cannot quietly broaden the package boundary. Do not provide CUI,
+              classified, export-controlled, or private bid material.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <div className="flex justify-between">
-                <Label>Page budget</Label>
+                <Label>Package page limit</Label>
                 <span className="font-mono text-sm">{pageBudget}</span>
               </div>
               <Slider
@@ -807,7 +817,7 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
               />
             </div>
             <div>
-              <Label>Crawl depth</Label>
+              <Label>Capture depth</Label>
               <Select value={depth} onValueChange={setDepth}>
                 <SelectTrigger className="mt-2">
                   <SelectValue />
@@ -826,7 +836,7 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
             </p>
           )}
           <Button type="submit" className="w-full rounded-full">
-            Create pre-bid workspace <ArrowRight />
+            Create bid control room <ArrowRight />
           </Button>
         </form>
       </DialogContent>

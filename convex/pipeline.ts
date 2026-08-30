@@ -136,6 +136,18 @@ export const getMissionSeeds = internalQuery({
   },
 });
 
+export const getCrawlSeed = internalQuery({
+  args: { missionId: v.id("missions"), seedId: v.id("missionSeeds") },
+  returns: v.object({ url: v.string(), pageLimit: v.number() }),
+  handler: async (ctx, args) => {
+    const seed = await ctx.db.get("missionSeeds", args.seedId);
+    if (seed === null || seed.missionId !== args.missionId) {
+      throw new Error("Crawl seed not found");
+    }
+    return { url: seed.url, pageLimit: seed.pageLimit };
+  },
+});
+
 export const handleWorkflowComplete = internalMutation({
   args: {
     workflowId: vWorkflowId,
@@ -268,6 +280,17 @@ export const storeProcessedSources = internalMutation({
         excerpt: v.string(),
         content: v.string(),
         sourceHash: v.string(),
+        kind: v.optional(
+          v.union(
+            v.literal("notice"),
+            v.literal("attachment"),
+            v.literal("amendment"),
+            v.literal("reference"),
+          ),
+        ),
+        fileName: v.optional(v.string()),
+        contentType: v.optional(v.string()),
+        parentUrl: v.optional(v.string()),
         claims: v.array(extractedClaim),
       }),
     ),
@@ -308,6 +331,16 @@ export const storeProcessedSources = internalMutation({
         excerpt: source.excerpt,
         content: source.content.slice(0, 180_000),
         sourceHash: source.sourceHash,
+        kind: source.kind ?? "reference",
+        ...(source.fileName === undefined
+          ? {}
+          : { fileName: source.fileName.slice(0, 240) }),
+        ...(source.contentType === undefined
+          ? {}
+          : { contentType: source.contentType.slice(0, 120) }),
+        ...(source.parentUrl === undefined
+          ? {}
+          : { parentUrl: source.parentUrl.slice(0, 2_000) }),
         retrievedAt: Date.now(),
       });
       sourceCount += 1;
@@ -628,6 +661,10 @@ export type StoredSource = {
   excerpt: string;
   content: string;
   sourceHash: string;
+  kind: "notice" | "attachment" | "amendment" | "reference";
+  fileName?: string;
+  contentType?: string;
+  parentUrl?: string;
   claims: Array<{
     text: string;
     summary: string;

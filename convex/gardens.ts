@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { evaluateConstructionRules } from "./lib/constructionRules";
+import { deriveReleaseState } from "./lib/releaseGate";
 import { requireMissionMember } from "./model/auth";
 
 const publicGarden = v.union(
@@ -92,6 +94,57 @@ const publicGarden = v.union(
         sourceUrl: v.string(),
       }),
     ),
+    constructionChecks: v.array(
+      v.object({
+        ruleKey: v.string(),
+        label: v.string(),
+        category: v.union(
+          v.literal("package"),
+          v.literal("submission"),
+          v.literal("eligibility"),
+          v.literal("bonding"),
+          v.literal("labor"),
+          v.literal("site_visit"),
+          v.literal("schedule"),
+          v.literal("safety"),
+          v.literal("commercial"),
+        ),
+        severity: v.union(
+          v.literal("blocking"),
+          v.literal("high"),
+          v.literal("standard"),
+        ),
+        explanation: v.string(),
+        status: v.union(
+          v.literal("verified"),
+          v.literal("unverified"),
+          v.literal("resolved"),
+          v.literal("not_applicable"),
+        ),
+        sourceVerified: v.boolean(),
+      }),
+    ),
+    control: v.object({
+      state: v.union(
+        v.literal("blocked"),
+        v.literal("ready"),
+        v.literal("approved"),
+      ),
+      packageVersion: v.number(),
+      lastCapturedAt: v.optional(v.number()),
+      impactCount: v.number(),
+      blockers: v.array(
+        v.object({
+          kind: v.union(
+            v.literal("package"),
+            v.literal("requirement"),
+            v.literal("construction"),
+            v.literal("change"),
+          ),
+          title: v.string(),
+        }),
+      ),
+    }),
     brief: v.union(
       v.null(),
       v.object({ title: v.string(), summary: v.string(), body: v.string() }),
@@ -111,6 +164,9 @@ const publicGarden = v.union(
             v.literal("claim"),
             v.literal("brief"),
             v.literal("email"),
+            v.literal("watch"),
+            v.literal("release"),
+            v.literal("impact"),
           ),
           label: v.string(),
         }),
@@ -198,6 +254,10 @@ export const getPublic = query({
       events,
       deliveries,
       replies,
+      constructionOverrides,
+      impacts,
+      changes,
+      snapshot,
     ] = await Promise.all([
       ctx.db.get("missions", garden.missionId),
       ctx.db
@@ -234,6 +294,25 @@ export const getPublic = query({
         .query("inboundReplies")
         .withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId))
         .take(50),
+      ctx.db
+        .query("constructionOverrides")
+        .withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId))
+        .take(30),
+      ctx.db
+        .query("changeImpacts")
+        .withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId))
+        .order("desc")
+        .take(100),
+      ctx.db
+        .query("changeEvents")
+        .withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId))
+        .order("desc")
+        .take(100),
+      ctx.db
+        .query("packageSnapshots")
+        .withIndex("by_missionId", (q) => q.eq("missionId", garden.missionId))
+        .order("desc")
+        .first(),
     ]);
     if (mission === null) return null;
     const claimSummaries = new Map(
@@ -250,6 +329,25 @@ export const getPublic = query({
       if (!existing.includes(summary)) existing.push(summary);
       summariesBySource.set(link.sourceId, existing);
     }
+    const constructionChecks = evaluateConstructionRules({
+      sources,
+      requirements,
+      overrides: constructionOverrides,
+    });
+    const release = deriveReleaseState({
+      hasBaseline: snapshot !== null,
+      requirements: requirements.map((item) => ({
+        ...item,
+        _id: String(item._id),
+      })),
+      constructionChecks,
+      impacts: impacts.map((item) => ({ ...item, _id: String(item._id) })),
+      changes: changes.map((item) => ({ ...item, _id: String(item._id) })),
+    });
+    const releaseState: "blocked" | "ready" | "approved" =
+      release.state === "ready" && mission.releaseState === "approved"
+        ? "approved"
+        : release.state;
     return {
       question: mission.question,
       opportunity:
@@ -316,6 +414,24 @@ export const getPublic = query({
           },
         ];
       }),
+      constructionChecks: constructionChecks.map((check) => ({
+        ruleKey: check.ruleKey,
+        label: check.label,
+        category: check.category,
+        severity: check.severity,
+        explanation: check.explanation,
+        status: check.status,
+        sourceVerified: check.sourceVerified,
+      })),
+      control: {
+        state: releaseState,
+        packageVersion: snapshot?.version ?? 0,
+        ...(snapshot === null ? {} : { lastCapturedAt: snapshot.capturedAt }),
+        impactCount: impacts.length,
+        blockers: release.blockers
+          .slice(0, 8)
+          .map(({ kind, title }) => ({ kind, title })),
+      },
       brief: briefs[0]
         ? {
             title: briefs[0].title,

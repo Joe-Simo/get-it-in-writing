@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   ExternalLink,
   FileCheck2,
+  FileDiff,
+  LockKeyhole,
   LoaderCircle,
 } from "lucide-react";
 import { api } from "../../convex/_generated/api";
@@ -29,7 +31,16 @@ type PublicProcess = {
   deliveryCount: number;
   verifiedReplyCount: number;
   events: Array<{
-    type: "mission" | "crawl" | "source" | "claim" | "brief" | "email";
+    type:
+      | "mission"
+      | "crawl"
+      | "source"
+      | "claim"
+      | "brief"
+      | "email"
+      | "watch"
+      | "release"
+      | "impact";
     label: string;
   }>;
 };
@@ -63,6 +74,27 @@ type PublicRequirement = {
   dueDateText?: string;
   sourceTitle: string;
   sourceUrl: string;
+};
+
+type PublicConstructionCheck = {
+  ruleKey: string;
+  label: string;
+  category: string;
+  severity: "blocking" | "high" | "standard";
+  explanation: string;
+  status: "verified" | "unverified" | "resolved" | "not_applicable";
+  sourceVerified: boolean;
+};
+
+type PublicControl = {
+  state: "blocked" | "ready" | "approved";
+  packageVersion: number;
+  lastCapturedAt?: number;
+  impactCount: number;
+  blockers: Array<{
+    kind: "package" | "requirement" | "construction" | "change";
+    title: string;
+  }>;
 };
 
 export default function PublicGardenPage() {
@@ -104,6 +136,8 @@ export default function PublicGardenPage() {
       question={garden.question}
       opportunity={garden.opportunity}
       requirements={garden.requirements}
+      constructionChecks={garden.constructionChecks}
+      control={garden.control}
       nodes={[...sourceNodes, ...claimNodes]}
       edges={edges}
       brief={garden.brief}
@@ -116,6 +150,8 @@ function GardenView({
   question,
   opportunity,
   requirements,
+  constructionChecks,
+  control,
   nodes,
   edges,
   brief,
@@ -124,6 +160,8 @@ function GardenView({
   question: string;
   opportunity: PublicOpportunity | null;
   requirements: PublicRequirement[];
+  constructionChecks: PublicConstructionCheck[];
+  control: PublicControl;
   nodes: EvidenceNode[];
   edges: EvidenceEdge[];
   brief: PublicBrief | null;
@@ -158,7 +196,7 @@ function GardenView({
             variant="outline"
             className="border-white/30 bg-transparent text-white"
           >
-            Public read-only decision
+            Public read-only bid record
           </Badge>
         </header>
 
@@ -166,7 +204,7 @@ function GardenView({
           <div className="flex flex-col">
             <p className="eyebrow text-[#c7ff4a]">
               {opportunity
-                ? "Pre-bid readiness brief"
+                ? "Live bid control record"
                 : "Decision under review"}
             </p>
             <h1 className="mt-5 text-5xl font-semibold leading-[.92] tracking-[-.055em] md:text-7xl">
@@ -273,17 +311,159 @@ function GardenView({
         </section>
       </div>
 
+      <PublicReleaseGate control={control} />
+
       {requirements.length > 0 && (
         <PublicComplianceMatrix
           opportunity={opportunity}
           requirements={requirements}
         />
       )}
+      {constructionChecks.length > 0 && (
+        <PublicConstructionRulepack checks={constructionChecks} />
+      )}
       {displayBrief && (
         <DecisionBrief brief={displayBrief} nodes={nodes} edges={edges} />
       )}
       <ProcessProof process={process} />
     </main>
+  );
+}
+
+function PublicReleaseGate({ control }: { control: PublicControl }) {
+  return (
+    <section className="border-y border-white/20 px-5 py-14 md:px-8 lg:px-12">
+      <div className="mx-auto grid max-w-[1400px] border-l border-t border-white/20 lg:grid-cols-[.72fr_1.28fr]">
+        <div className="border-b border-r border-white/20 p-6 md:p-8">
+          <div className="flex items-center gap-2">
+            <LockKeyhole className="size-5 text-[#c7ff4a]" />
+            <p className="eyebrow text-[#c7ff4a]">Bid release gate</p>
+          </div>
+          <p className="mt-6 text-5xl font-semibold tracking-[-.055em] capitalize">
+            {control.state}
+          </p>
+          <div className="mt-8 grid grid-cols-2 border-l border-t border-white/20">
+            {[
+              [control.packageVersion, "package version"],
+              [control.impactCount, "change impacts"],
+            ].map(([value, label]) => (
+              <div
+                key={label}
+                className="border-b border-r border-white/20 p-4"
+              >
+                <p className="text-3xl font-semibold">{value}</p>
+                <p className="eyebrow mt-2 text-white/45">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="border-b border-r border-white/20 p-6 md:p-8">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="eyebrow text-white/45">What holds release</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-.04em]">
+                Current, source-backed blockers
+              </h2>
+            </div>
+            <FileDiff className="size-5 text-[#c7ff4a]" />
+          </div>
+          <ol className="mt-6 border-t border-white/20">
+            {control.blockers.slice(0, 8).map((blocker, index) => (
+              <li
+                key={`${blocker.kind}-${blocker.title}`}
+                className="grid grid-cols-[34px_1fr_auto] gap-3 border-b border-white/20 py-4"
+              >
+                <span className="font-mono text-xs text-[#c7ff4a]">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="text-sm font-semibold">{blocker.title}</span>
+                <span className="text-[9px] uppercase tracking-[.14em] text-white/45">
+                  {blocker.kind}
+                </span>
+              </li>
+            ))}
+            {control.blockers.length === 0 && (
+              <li className="flex items-center gap-2 border-b border-white/20 py-4 text-sm text-[#c7ff4a]">
+                <CheckCircle2 className="size-4" /> No material release holds
+                remain.
+              </li>
+            )}
+          </ol>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PublicConstructionRulepack({
+  checks,
+}: {
+  checks: PublicConstructionCheck[];
+}) {
+  const unverifiedBlocking = checks.filter(
+    (check) => check.severity === "blocking" && check.status === "unverified",
+  ).length;
+  return (
+    <section className="border-t border-black/20 bg-[#e8e3d8] px-5 py-20 text-[#111612] md:px-8 lg:px-12 lg:py-28">
+      <div className="mx-auto max-w-[1400px]">
+        <div className="grid gap-10 lg:grid-cols-[.62fr_1.38fr]">
+          <div>
+            <p className="eyebrow text-[#4d6b31]">
+              Federal construction rulepack
+            </p>
+            <h2 className="mt-5 text-5xl font-semibold leading-[.92] tracking-[-.055em] md:text-7xl">
+              What the package proves—and what it still cannot.
+            </h2>
+            <p className="mt-6 max-w-lg text-base leading-relaxed text-black/62">
+              Verified checks match the authorized source set. Unverified checks
+              are explicit gaps for the team to resolve; they are not claims
+              that the solicitation requires an absent item.
+            </p>
+            <div className="mt-8 border-l-2 border-[#9c4d3f] pl-4">
+              <p className="text-4xl font-semibold tracking-[-.05em]">
+                {unverifiedBlocking}
+              </p>
+              <p className="eyebrow mt-2 text-black/65">
+                blocking checks still unverified
+              </p>
+            </div>
+          </div>
+          <ol className="grid border-l border-t border-black/20 sm:grid-cols-2">
+            {checks.map((check, index) => (
+              <li
+                key={check.ruleKey}
+                className="border-b border-r border-black/20 p-5"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-mono text-xs text-[#4d6b31]">
+                    R{String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-[9px] font-semibold uppercase tracking-[.13em] ${
+                      check.status === "verified" || check.status === "resolved"
+                        ? "bg-[#c7ff4a]"
+                        : check.status === "not_applicable"
+                          ? "bg-black/10"
+                          : check.severity === "blocking"
+                            ? "bg-[#ff6b57]"
+                            : "bg-[#e9b94f]"
+                    }`}
+                  >
+                    {check.status.replace("_", " ")}
+                  </span>
+                </div>
+                <h3 className="mt-10 text-lg font-semibold tracking-[-.025em]">
+                  {check.label}
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-black/58">
+                  {check.explanation}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -336,13 +516,13 @@ function PublicComplianceMatrix({
                   <dd className="text-3xl font-semibold tracking-[-.05em]">
                     {value}
                   </dd>
-                  <dt className="eyebrow mt-2 text-black/55">{label}</dt>
+                  <dt className="eyebrow mt-2 text-black/65">{label}</dt>
                 </div>
               ))}
             </dl>
             {opportunity?.bidDueAt !== undefined && (
               <div className="mt-6 border-l-2 border-[#4d6b31] pl-4">
-                <p className="eyebrow text-black/48">Offer deadline</p>
+                <p className="eyebrow text-black/65">Offer deadline</p>
                 <p className="mt-2 text-xl font-semibold">
                   {new Intl.DateTimeFormat("en-US", {
                     dateStyle: "long",
@@ -381,7 +561,7 @@ function PublicComplianceMatrix({
                       >
                         {requirement.criticality}
                       </span>
-                      <span className="text-[10px] font-semibold uppercase tracking-[.12em] text-black/48">
+                      <span className="text-[10px] font-semibold uppercase tracking-[.12em] text-black/65">
                         {requirement.category}
                       </span>
                       {requirement.requiredWithBid && (
@@ -393,7 +573,7 @@ function PublicComplianceMatrix({
                     <h3 className="mt-3 text-lg font-semibold tracking-[-.02em]">
                       {requirement.text}
                     </h3>
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-black/55">
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-black/65">
                       {requirement.dueDateText && (
                         <span>Due: {requirement.dueDateText}</span>
                       )}
@@ -416,7 +596,7 @@ function PublicComplianceMatrix({
               ))}
           </ol>
         </div>
-        <p className="mt-6 text-right text-xs text-black/45">
+        <p className="mt-6 text-right text-xs text-black/65">
           {resolved} of {requirements.length} requirements resolved by the team
         </p>
       </div>
@@ -567,21 +747,22 @@ function DecisionBrief({
 }
 
 function ProcessProof({ process }: { process: PublicProcess }) {
-  const sponsors = [
+  const operations = [
     {
-      name: "Firecrawl",
+      name: "Package capture",
       value: `${process.pagesProcessed} pages processed`,
-      detail: "Collected only the trusted, budgeted source set.",
+      detail:
+        "Collected only the authorized public package and its bounded source set.",
       verified: process.pagesProcessed > 0,
     },
     {
-      name: "OpenAI",
+      name: "Requirement trace",
       value: `${process.claimCount} claims structured`,
-      detail: "Extracted and synthesized source-linked decision evidence.",
+      detail: "Kept every bid requirement attached to its originating passage.",
       verified: process.claimCount > 0,
     },
     {
-      name: "AgentMail",
+      name: "Review loop",
       value:
         process.deliveryCount > 0
           ? `${process.deliveryCount} brief ${process.deliveryCount === 1 ? "delivery" : "deliveries"}`
@@ -592,10 +773,10 @@ function ProcessProof({ process }: { process: PublicProcess }) {
           : undefined,
       detail:
         process.verifiedReplyCount > 0
-          ? "Delivered the brief and returned signed replies for human review."
+          ? "Delivered the record and returned verified replies for human review."
           : process.deliveryCount > 0
-            ? "Delivered the brief; a signed team reply is still pending."
-            : "No brief has been delivered for review yet.",
+            ? "Delivered the record; a team reply is still pending."
+            : "No review message has been delivered yet.",
       verified: process.deliveryCount > 0,
     },
   ];
@@ -605,44 +786,47 @@ function ProcessProof({ process }: { process: PublicProcess }) {
       <div className="mx-auto max-w-[1400px]">
         <div className="grid gap-8 lg:grid-cols-[.7fr_1.3fr]">
           <div>
-            <p className="eyebrow text-[#c7ff4a]">Verified process</p>
+            <p className="eyebrow text-[#c7ff4a]">Versioned operating record</p>
             <h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.055em] md:text-7xl">
-              The recommendation has receipts.
+              Every state change has receipts.
             </h2>
             <p className="mt-6 max-w-md text-sm leading-relaxed text-white/58">
-              Convex keeps collection, synthesis, delivery, and review
-              synchronized in realtime while the public projection reveals no
-              private team data.
+              Package capture, requirement trace, follow-up, and human review
+              remain synchronized while this public projection excludes private
+              team data.
             </p>
           </div>
           <div>
             <div className="grid border-l border-t border-white/20 md:grid-cols-3">
-              {sponsors.map((sponsor) => (
+              {operations.map((operation) => (
                 <article
-                  key={sponsor.name}
+                  key={operation.name}
                   className="min-h-52 border-b border-r border-white/20 p-5"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold">{sponsor.name}</p>
-                    {sponsor.verified ? (
+                    <p className="text-sm font-semibold">{operation.name}</p>
+                    {operation.verified ? (
                       <CheckCircle2 className="size-4 text-[#c7ff4a]" />
                     ) : (
-                      <span
-                        className="size-2 rounded-full border border-white/40"
-                        aria-label="Pending"
-                      />
+                      <>
+                        <span
+                          className="size-2 rounded-full border border-white/40"
+                          aria-hidden="true"
+                        />
+                        <span className="sr-only">Pending</span>
+                      </>
                     )}
                   </div>
                   <p className="mt-12 text-2xl font-semibold tracking-[-.035em]">
-                    {sponsor.value}
+                    {operation.value}
                   </p>
-                  {sponsor.secondaryValue && (
+                  {operation.secondaryValue && (
                     <p className="mt-1 text-lg font-semibold tracking-[-.025em] text-[#c7ff4a]">
-                      {sponsor.secondaryValue}
+                      {operation.secondaryValue}
                     </p>
                   )}
                   <p className="mt-3 text-xs leading-relaxed text-white/55">
-                    {sponsor.detail}
+                    {operation.detail}
                   </p>
                 </article>
               ))}

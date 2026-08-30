@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { FunctionReturnType } from "convex/server";
 import { ConvexProvider, ConvexReactClient, useQuery } from "convex/react";
 import {
   BrowserRouter,
@@ -11,13 +11,17 @@ import {
 } from "react-router-dom";
 import {
   ArrowRight,
-  CircleDot,
+  Check,
+  CircleAlert,
   ExternalLink,
+  FileDiff,
+  LockKeyhole,
   Menu,
   Orbit,
-  Radar,
+  RadioTower,
+  Route as RouteIcon,
+  Send,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import { api } from "../convex/_generated/api";
 import { EvidenceGraph } from "@/components/observatory/EvidenceGraph";
@@ -82,6 +86,8 @@ function useStaticMode() {
 
 function LandingPage() {
   const garden = useQuery(api.gardens.getPublic, { slug: featuredGardenSlug });
+  const [staticMode, setStaticMode] = useStaticMode();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const sourceNodes: EvidenceNode[] =
     garden?.sources.map((source, index) => ({
       id: source._id,
@@ -113,9 +119,9 @@ function LandingPage() {
       target: link.claimId,
       support: link.support,
     })) ?? [];
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = nodes.find((node) => node.id === selectedId) ?? nodes[0];
-  const [staticMode, setStaticMode] = useStaticMode();
+  const control = garden?.control;
+
   return (
     <div className="min-h-screen bg-[#f2eee5] text-[#111612]">
       <a href="#content" className="skip-link">
@@ -123,84 +129,155 @@ function LandingPage() {
       </a>
       <SiteHeader />
       <main id="content">
-        <section className="hero-grid border-b border-black/20 px-5 pb-8 pt-8 md:px-8 lg:px-12 lg:pb-12 lg:pt-12">
-          <div className="flex min-h-[620px] flex-col justify-between border-black/20 pb-8 lg:border-r lg:pr-10">
-            <div>
-              <div className="mb-9 flex items-center gap-3">
-                <Badge
-                  variant="outline"
-                  className="border-black/30 bg-transparent px-3 py-1 text-[10px] uppercase tracking-[.2em]"
-                >
-                  Convex All Gas Hackathon
-                </Badge>
-                <span className="text-xs text-black/60">
-                  Pre-bid readiness for small federal contractors
-                </span>
-              </div>
-              <h1 className="max-w-[820px] text-[clamp(4rem,8.5vw,8.6rem)] font-semibold leading-[.79] tracking-[-.075em]">
-                Know what
-                <span className="block font-editorial font-normal italic tracking-[-.055em]">
-                  kills the bid.
-                </span>
-              </h1>
-              <p className="mt-10 max-w-[640px] text-balance text-xl leading-[1.35] tracking-[-.025em] md:text-2xl">
-                Before you spend days pricing a federal construction
-                opportunity, turn its solicitation into a source-linked
-                compliance matrix: disqualifiers, missing proof, owners,
-                deadlines, and a defensible bid/no-bid record.
-              </p>
-            </div>
-            <div className="mt-10 flex flex-wrap items-center gap-3">
-              <Button
-                asChild
-                size="lg"
-                className="h-12 rounded-full bg-[#111612] px-6 text-[#f2eee5] hover:bg-[#263128]"
-              >
-                <Link to="/app">
-                  Analyze a solicitation <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="h-12 rounded-full border-black/35 bg-transparent px-6 hover:bg-black/5"
-              >
-                <Link to={featuredGardenPath}>
-                  Inspect the production proof
-                </Link>
-              </Button>
-            </div>
-          </div>
-          <div className="flex min-h-[620px] flex-col pt-8 lg:pl-10 lg:pt-0">
-            <div className="mb-4 flex items-center justify-between">
+        <section className="border-b border-black/20 px-5 py-7 md:px-8 lg:px-12 lg:py-10">
+          <div className="grid min-h-[600px] border-l border-t border-black/20 lg:grid-cols-[1.04fr_.96fr]">
+            <div className="flex flex-col justify-between border-b border-r border-black/20 p-6 md:p-9 lg:p-12">
               <div>
-                <p className="eyebrow">Live source proof / 01</p>
-                <p className="mt-1 text-sm text-black/58">
-                  Production construction bid research
-                </p>
-              </div>
-              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
-                <input
-                  type="checkbox"
-                  checked={staticMode}
-                  onChange={(event) => setStaticMode(event.target.checked)}
-                  className="accent-[#111612]"
-                />
-                Static mode
-              </label>
-            </div>
-            <div className="min-h-0 flex-1">
-              {garden === undefined ? (
-                <div className="grid h-full min-h-[420px] place-items-center border border-black/20">
-                  <Orbit className="animate-spin text-[#4d6b31]" />
-                  <span className="sr-only">
-                    Loading real production evidence
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge
+                    variant="outline"
+                    className="border-black/30 bg-transparent px-3 py-1 text-[10px] uppercase tracking-[.2em]"
+                  >
+                    Bid package control
+                  </Badge>
+                  <span className="text-xs text-black/55">
+                    For construction estimating teams
                   </span>
                 </div>
+                <h1 className="mt-10 max-w-[920px] text-[clamp(4rem,7.6vw,7.6rem)] font-semibold leading-[.78] tracking-[-.078em]">
+                  Never price
+                  <span className="block font-editorial font-normal italic tracking-[-.055em]">
+                    a stale package.
+                  </span>
+                </h1>
+                <p className="mt-10 max-w-[680px] text-balance text-xl leading-[1.35] tracking-[-.025em] md:text-2xl">
+                  Signal Garden watches the live solicitation, traces every
+                  amendment into the work it changes, and keeps bid release
+                  locked until the right people clear the impact.
+                </p>
+              </div>
+              <div className="mt-12 flex flex-wrap items-center gap-3">
+                <Button
+                  asChild
+                  size="lg"
+                  className="h-12 rounded-full bg-[#111612] px-6 text-[#f2eee5] hover:bg-[#263128]"
+                >
+                  <Link to="/app">
+                    Open the control room <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="lg"
+                  className="h-12 rounded-full border-black/35 bg-transparent px-6 hover:bg-black/5"
+                >
+                  <Link to={featuredGardenPath}>Inspect the live bid</Link>
+                </Button>
+              </div>
+            </div>
+            <LiveReleasePanel garden={garden} />
+          </div>
+        </section>
+
+        <section
+          id="change-flow"
+          className="px-5 py-20 md:px-8 lg:px-12 lg:py-28"
+        >
+          <div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr]">
+            <div>
+              <p className="eyebrow">One change, every consequence / 01</p>
+              <h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.06em] md:text-7xl">
+                The amendment enters once.
+              </h2>
+              <p className="mt-6 max-w-md text-base leading-relaxed text-black/58">
+                Scope, price, schedule, forms, bonds, and trade coverage stop
+                living in separate inboxes and spreadsheets. Every consequence
+                stays attached to the changed source text.
+              </p>
+            </div>
+            <div className="relative border-l border-t border-black/20">
+              {[
+                {
+                  index: "V+1",
+                  icon: FileDiff,
+                  title: "Capture a new package version",
+                  body: "The notice and public document inventory are stored as a new immutable baseline—not overwritten.",
+                },
+                {
+                  index: "Δ",
+                  icon: RouteIcon,
+                  title: "Route exact impacts",
+                  body: "Each changed passage becomes a source-linked action for the estimator, PM, trade partner, or bond agent.",
+                },
+                {
+                  index: "→",
+                  icon: Send,
+                  title: "Keep the reply with the risk",
+                  body: "Questions go to the responsible contact. Replies return to the same bid impact instead of disappearing in email.",
+                },
+                {
+                  index: "✓",
+                  icon: LockKeyhole,
+                  title: "Release only when it is clear",
+                  body: "Material impacts and required-with-bid items must be resolved before a person can approve the final package.",
+                },
+              ].map(({ index, icon: Icon, title, body }) => (
+                <article
+                  key={title}
+                  className="grid min-h-40 grid-cols-[64px_1fr] border-b border-r border-black/20"
+                >
+                  <div className="flex flex-col items-center justify-between border-r border-black/20 py-5">
+                    <span className="font-mono text-xs text-[#4d6b31]">
+                      {index}
+                    </span>
+                    <Icon className="size-5 text-[#4d6b31]" />
+                  </div>
+                  <div className="p-5 md:p-7">
+                    <h3 className="text-2xl font-semibold tracking-[-.035em]">
+                      {title}
+                    </h3>
+                    <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/58">
+                      {body}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="live-bid"
+          className="border-y border-black/20 bg-[#0a0d0b] px-5 py-20 text-[#f2eee5] md:px-8 lg:px-12 lg:py-28"
+        >
+          <div className="mb-10 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+            <div>
+              <p className="eyebrow text-[#c7ff4a]">Live source control / 02</p>
+              <h2 className="mt-4 max-w-4xl text-5xl font-semibold leading-[.92] tracking-[-.06em] md:text-7xl">
+                Inspect the bid, not our claims.
+              </h2>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-white/65">
+              <input
+                type="checkbox"
+                checked={staticMode}
+                onChange={(event) => setStaticMode(event.target.checked)}
+                className="accent-[#c7ff4a]"
+              />
+              Static graph
+            </label>
+          </div>
+          <div className="grid border-l border-t border-white/20 lg:grid-cols-[1.4fr_.6fr]">
+            <div className="min-h-[540px] border-b border-r border-white/20 p-3 md:p-5">
+              {garden === undefined ? (
+                <div className="grid h-full min-h-[500px] place-items-center">
+                  <Orbit className="animate-spin text-[#c7ff4a]" />
+                  <span className="sr-only">Loading the live bid record</span>
+                </div>
               ) : garden === null ? (
-                <div className="grid h-full min-h-[420px] place-items-center border border-black/20 p-8 text-center text-sm text-black/60">
-                  The production decision is unavailable.
+                <div className="grid h-full min-h-[500px] place-items-center p-8 text-center text-white/55">
+                  The public bid record is unavailable.
                 </div>
               ) : (
                 <EvidenceGraph
@@ -212,49 +289,78 @@ function LandingPage() {
                 />
               )}
             </div>
-            {selected && (
-              <div className="mt-4 grid gap-3 border-t border-black/20 pt-4 sm:grid-cols-[130px_1fr]">
-                <p className="eyebrow">Selected evidence</p>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-semibold tracking-[-.02em]">
-                      {selected.label}
-                    </h2>
-                    <StatusDot status={selected.status} />
+            <aside className="border-b border-r border-white/20 p-6 md:p-8">
+              <p className="eyebrow text-[#c7ff4a]">Selected source path</p>
+              <h3 className="mt-6 text-3xl font-semibold tracking-[-.045em]">
+                {selected?.label ?? "Loading source evidence…"}
+              </h3>
+              <p className="mt-4 text-sm leading-relaxed text-white/58">
+                {selected?.detail ??
+                  "Every requirement stays connected to the public passage that created it."}
+              </p>
+              {selected?.url && (
+                <a
+                  href={selected.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-6 inline-flex items-center gap-2 text-sm text-[#c7ff4a] hover:underline"
+                >
+                  Open original source <ExternalLink className="size-4" />
+                </a>
+              )}
+              <dl className="mt-10 border-t border-white/20">
+                {[
+                  [garden?.process.sourceCount ?? "—", "public sources"],
+                  [garden?.requirements.length ?? "—", "bid requirements"],
+                  [control?.blockers.length ?? "—", "release blockers shown"],
+                ].map(([value, label]) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between border-b border-white/20 py-4"
+                  >
+                    <dt className="text-xs uppercase tracking-[.15em] text-white/45">
+                      {label}
+                    </dt>
+                    <dd className="text-xl font-semibold">{value}</dd>
                   </div>
-                  <p className="mt-1 max-w-xl text-sm leading-relaxed text-black/60">
-                    {selected.detail}
-                  </p>
-                </div>
-              </div>
-            )}
+                ))}
+              </dl>
+            </aside>
           </div>
         </section>
 
-        <section className="border-b border-black/20 px-5 py-6 md:px-8 lg:px-12">
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_2fr]">
+        <section
+          id="release-gate"
+          className="px-5 py-20 md:px-8 lg:px-12 lg:py-28"
+        >
+          <div className="grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-start">
             <div>
-              <p className="eyebrow">Verified production run</p>
-              <p className="mt-4 max-w-xl font-editorial text-3xl leading-[1.05] tracking-[-.035em] md:text-4xl">
-                {garden?.question ?? "Loading the production analysis…"}
+              <p className="eyebrow">Human release gate / 03</p>
+              <h2 className="mt-5 max-w-3xl text-5xl font-semibold leading-[.9] tracking-[-.06em] md:text-7xl">
+                “We saw it” is not clearance.
+              </h2>
+              <p className="mt-6 max-w-xl text-lg leading-relaxed text-black/60">
+                A bid remains blocked while a material amendment impact, a
+                required submission item, or the package baseline is unresolved.
+                Approval records who released it and why.
               </p>
             </div>
-            <div className="grid grid-cols-2 border-l border-t border-black/20 md:grid-cols-4">
+            <div className="border-l border-t border-black/20">
               {[
-                [garden?.process.pagesProcessed ?? "—", "pages processed"],
-                [garden?.process.sourceCount ?? "—", "trusted sources"],
-                [garden?.process.claimCount ?? "—", "linked claims"],
-                [garden?.process.deliveryCount ?? "—", "brief deliveries"],
-              ].map(([value, label]) => (
+                "No silent package overwrite",
+                "No impact without the changed source passage",
+                "No automatic bid decision",
+                "No release while a material item is open",
+              ].map((item, index) => (
                 <div
-                  key={label}
-                  className="border-b border-r border-black/20 p-5"
+                  key={item}
+                  className="grid min-h-24 grid-cols-[72px_1fr] items-center border-b border-r border-black/20"
                 >
-                  <p className="text-4xl font-semibold tracking-[-.06em]">
-                    {value}
-                  </p>
-                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-[.17em] text-black/60">
-                    {label}
+                  <span className="grid h-full place-items-center border-r border-black/20 font-mono text-xs text-[#4d6b31]">
+                    0{index + 1}
+                  </span>
+                  <p className="flex items-center gap-3 px-5 text-lg font-semibold tracking-[-.025em]">
+                    <Check className="size-4 text-[#4d6b31]" /> {item}
                   </p>
                 </div>
               ))}
@@ -262,88 +368,10 @@ function LandingPage() {
           </div>
         </section>
 
-        <section className="px-5 py-20 md:px-8 lg:px-12 lg:py-28">
-          <div className="mb-14 flex flex-col justify-between gap-6 md:flex-row md:items-end">
-            <div>
-              <p className="eyebrow">How it works / 02</p>
-              <h2 className="mt-4 max-w-4xl text-5xl font-semibold leading-[.92] tracking-[-.06em] md:text-7xl">
-                Make the compliance work happen{" "}
-                <span className="font-editorial font-normal italic">
-                  before pricing.
-                </span>
-              </h2>
-            </div>
-            <p className="max-w-sm text-sm leading-relaxed text-black/58">
-              The product does not write a glossy proposal and hope. It helps
-              the team decide whether the opportunity deserves estimator time at
-              all.
-            </p>
-          </div>
-          <div className="grid border-l border-t border-black/20 md:grid-cols-3">
-            <Principle
-              number="01"
-              icon={<Radar />}
-              title="Ingest the real package"
-              body="Authorize the solicitation and referenced public documents. Firecrawl stays inside that bounded source set."
-            />
-            <Principle
-              number="02"
-              icon={<Sparkles />}
-              title="Build the matrix"
-              body="OpenAI extracts explicit forms, bonds, eligibility rules, deadlines, and submission instructions with the exact source passage attached."
-            />
-            <Principle
-              number="03"
-              icon={<ShieldCheck />}
-              title="Resolve and decide"
-              body="Assign each requirement, record missing proof, route the brief through AgentMail, and preserve the human bid/no-bid rationale in Convex."
-            />
-          </div>
-        </section>
-
-        <section className="bg-[#0a0d0b] px-5 py-20 text-[#f2eee5] md:px-8 lg:px-12 lg:py-28">
-          <div className="grid gap-12 lg:grid-cols-[.75fr_1.25fr]">
-            <div>
-              <p className="eyebrow text-[#c7ff4a]">Proof of work / 03</p>
-              <h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.06em] md:text-7xl">
-                A record your team can defend.
-              </h2>
-              <p className="mt-6 max-w-md text-base leading-relaxed text-white/58">
-                Convex keeps requirements, evidence, owners, decisions, and
-                verified reviewer replies synchronized for every collaborator in
-                realtime.
-              </p>
-            </div>
-            <ol className="border-t border-white/20">
-              {garden?.process.events.map((event, index) => (
-                <li
-                  key={`${event.type}-${event.label}-${index}`}
-                  className="grid grid-cols-[64px_1fr_auto] items-center gap-4 border-b border-white/20 py-5"
-                >
-                  <span className="font-mono text-xs uppercase text-white/52">
-                    {event.type}
-                  </span>
-                  <span className="text-lg tracking-[-.02em]">
-                    {event.label}
-                  </span>
-                  <span className="text-xs text-[#c7ff4a]">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                </li>
-              )) ?? (
-                <li className="border-b border-white/20 py-5 text-white/55">
-                  Loading verified process events…
-                </li>
-              )}
-            </ol>
-          </div>
-        </section>
-
-        <section className="px-5 py-20 text-center md:px-8 lg:px-12 lg:py-32">
-          <CircleDot className="mx-auto size-8 text-[#4d6b31]" />
-          <p className="mx-auto mt-6 max-w-5xl font-editorial text-5xl leading-[.95] tracking-[-.045em] md:text-7xl">
-            Bid the work you can win. Catch the requirement that would make the
-            rest wasted effort.
+        <section className="border-t border-black/20 px-5 py-24 text-center md:px-8 lg:px-12 lg:py-32">
+          <RadioTower className="mx-auto size-8 text-[#4d6b31]" />
+          <p className="mx-auto mt-7 max-w-5xl font-editorial text-5xl leading-[.95] tracking-[-.045em] md:text-7xl">
+            The package will change. Your bid should know what changed with it.
           </p>
           <Button
             asChild
@@ -351,7 +379,7 @@ function LandingPage() {
             className="mt-10 h-12 rounded-full bg-[#111612] px-7 text-[#f2eee5]"
           >
             <Link to="/app">
-              Open a pre-bid workspace <ArrowRight className="size-4" />
+              Track a live bid <ArrowRight className="size-4" />
             </Link>
           </Button>
         </section>
@@ -361,10 +389,102 @@ function LandingPage() {
   );
 }
 
+type GardenResult =
+  FunctionReturnType<typeof api.gardens.getPublic> | undefined;
+
+function LiveReleasePanel({ garden }: { garden: GardenResult }) {
+  const control = garden?.control;
+  const state = control?.state ?? "blocked";
+  const stateLabel = garden === undefined ? "Loading" : state;
+  return (
+    <aside className="flex min-h-[600px] flex-col border-b border-r border-black/20 bg-[#e8e3d8]">
+      <div className="flex items-start justify-between border-b border-black/20 p-6 md:p-8">
+        <div>
+          <p className="eyebrow">Live release gate</p>
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-black/65">
+            {garden?.opportunity?.title ?? "Loading the current bid record…"}
+          </p>
+        </div>
+        <Badge
+          className={
+            state === "approved"
+              ? "bg-[#587938] text-white"
+              : state === "ready"
+                ? "bg-[#c7ff4a] text-[#111612]"
+                : "bg-[#111612] text-[#f2eee5]"
+          }
+        >
+          {stateLabel}
+        </Badge>
+      </div>
+      <div className="grid grid-cols-3 border-b border-black/20">
+        {[
+          [control?.packageVersion ?? "—", "package version"],
+          [control?.impactCount ?? "—", "change impacts"],
+          [control?.blockers.length ?? "—", "release holds"],
+        ].map(([value, label]) => (
+          <div
+            key={label}
+            className="border-r border-black/20 p-4 last:border-r-0"
+          >
+            <p className="text-3xl font-semibold tracking-[-.06em]">{value}</p>
+            <p className="mt-2 text-[9px] font-semibold uppercase tracking-[.16em] text-black/70">
+              {label}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="flex-1 p-6 md:p-8">
+        <div className="flex items-center justify-between">
+          <p className="eyebrow">What holds release</p>
+          <LockKeyhole className="size-5" />
+        </div>
+        <ol className="mt-5 border-t border-black/20">
+          {control?.blockers.slice(0, 5).map((blocker, index) => (
+            <li
+              key={`${blocker.kind}-${blocker.title}`}
+              className="grid grid-cols-[34px_1fr_auto] items-start gap-3 border-b border-black/20 py-4"
+            >
+              <span className="font-mono text-xs text-[#4d6b31]">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="text-sm font-semibold leading-snug">
+                {blocker.title}
+              </span>
+              <span className="text-[9px] uppercase tracking-[.13em] text-black/70">
+                {blocker.kind}
+              </span>
+            </li>
+          )) ?? (
+            <li className="border-b border-black/20 py-5 text-sm text-black/55">
+              Loading current release holds…
+            </li>
+          )}
+          {control !== undefined && control.blockers.length === 0 && (
+            <li className="flex items-center gap-3 border-b border-black/20 py-5 text-sm font-semibold">
+              <ShieldCheck className="size-5 text-[#4d6b31]" /> No material
+              holds remain.
+            </li>
+          )}
+        </ol>
+      </div>
+      <div className="border-t border-black/20 p-6 md:p-8">
+        <div className="flex items-center gap-3">
+          <CircleAlert className="size-5 text-[#4d6b31]" />
+          <p className="text-sm leading-relaxed text-black/58">
+            Release is a human action. New package evidence reopens the gate.
+          </p>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 function SiteHeader() {
   const links = [
-    ["How it works", "/#content"],
-    ["Production proof", featuredGardenPath],
+    ["Change flow", "/#change-flow"],
+    ["Live bid", "/#live-bid"],
+    ["Release gate", "/#release-gate"],
   ];
   return (
     <header className="sticky top-0 z-50 flex h-[72px] items-center justify-between border-b border-black/20 bg-[#f2eee5]/90 px-5 backdrop-blur-xl md:px-8 lg:px-12">
@@ -389,7 +509,7 @@ function SiteHeader() {
           size="sm"
           className="rounded-full bg-[#111612] text-[#f2eee5]"
         >
-          <Link to="/app">Open workspace</Link>
+          <Link to="/app">Open control room</Link>
         </Button>
       </nav>
       <Sheet>
@@ -411,7 +531,7 @@ function SiteHeader() {
               </Link>
             ))}
             <Button asChild className="mt-4 rounded-full">
-              <Link to="/app">Open workspace</Link>
+              <Link to="/app">Open control room</Link>
             </Button>
           </nav>
         </SheetContent>
@@ -426,44 +546,6 @@ function SignalMark() {
       aria-hidden="true"
       className="relative block size-5 rounded-full border border-current before:absolute before:inset-[5px] before:rounded-full before:bg-[#688f40] after:absolute after:-right-1 after:top-1/2 after:h-px after:w-2 after:bg-current"
     />
-  );
-}
-
-function Principle({
-  number,
-  icon,
-  title,
-  body,
-}: {
-  number: string;
-  icon: ReactNode;
-  title: string;
-  body: string;
-}) {
-  return (
-    <article className="min-h-[340px] border-b border-r border-black/20 p-6 md:p-8">
-      <div className="flex items-start justify-between">
-        <span className="text-[#4d6b31] [&_svg]:size-6">{icon}</span>
-        <span className="font-mono text-xs text-black/60">{number}</span>
-      </div>
-      <div className="mt-28">
-        <h3 className="text-2xl font-semibold tracking-[-.035em]">{title}</h3>
-        <p className="mt-3 max-w-sm text-sm leading-relaxed text-black/58">
-          {body}
-        </p>
-      </div>
-    </article>
-  );
-}
-
-function StatusDot({ status }: { status: EvidenceNode["status"] }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-black/20 px-2 py-1 text-[9px] font-semibold uppercase tracking-[.15em]">
-      <span
-        className={`size-1.5 rounded-full ${status === "supported" ? "bg-[#688f40]" : status === "disputed" ? "bg-[#ff6b57]" : "bg-[#708be0]"}`}
-      />
-      {status}
-    </span>
   );
 }
 
@@ -488,55 +570,38 @@ function LocalSetupNotice() {
     <div className="flex min-h-screen items-center justify-center bg-[#0a0d0b] p-6 text-[#f2eee5]">
       <div className="max-w-lg border border-white/20 p-8">
         <SignalMark />
-        <p className="eyebrow mt-10 text-[#c7ff4a]">Local interface ready</p>
-        <h1 className="mt-4 text-5xl font-semibold leading-[.95] tracking-[-.06em]">
-          Connect this checkout to its dedicated Convex deployment.
+        <h1 className="mt-8 text-4xl font-semibold tracking-[-.05em]">
+          Connect this checkout to its dedicated workspace.
         </h1>
-        <p className="mt-5 leading-relaxed text-white/58">
-          Private teams, live crawls, and email review require the isolated
-          Signal Garden backend. The published production decision remains
-          available read-only.
+        <p className="mt-4 text-sm leading-relaxed text-white/55">
+          The public site is available, but the private control room requires
+          the project-specific environment configuration.
         </p>
-        <Button
-          asChild
-          variant="outline"
-          className="mt-8 rounded-full border-white/30 bg-transparent text-white hover:bg-white/10"
-        >
-          <Link to={featuredGardenPath}>Open the real decision</Link>
+        <Button asChild variant="outline" className="mt-6 rounded-full">
+          <Link to="/">Return home</Link>
         </Button>
       </div>
     </div>
   );
 }
 
-function SiteFooter() {
-  return (
-    <footer className="flex flex-col gap-6 border-t border-black/20 px-5 py-8 text-sm md:flex-row md:items-center md:justify-between md:px-8 lg:px-12">
-      <div className="flex items-center gap-2 font-semibold">
-        <SignalMark /> Signal Garden · Pre-bid readiness
-      </div>
-      <p className="text-black/60">
-        Built with Convex · OpenAI · Firecrawl · AgentMail · vgpu
-      </p>
-      <a
-        href="https://github.com/vercel-labs/vgpu"
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1.5 text-black/60 hover:text-black"
-      >
-        GPU instrument details <ExternalLink className="size-3.5" />
-      </a>
-    </footer>
-  );
-}
-
 function RouteLoader() {
   return (
     <div className="grid min-h-screen place-items-center bg-[#0a0d0b] text-[#f2eee5]">
-      <div className="flex items-center gap-3">
-        <Orbit className="animate-spin text-[#c7ff4a]" />
-        <span className="eyebrow">Loading the evidence</span>
-      </div>
+      <Orbit className="animate-spin text-[#c7ff4a]" />
+      <span className="sr-only">Loading Signal Garden</span>
     </div>
+  );
+}
+
+function SiteFooter() {
+  return (
+    <footer className="grid gap-6 border-t border-black/20 px-5 py-8 text-xs text-black/65 md:grid-cols-3 md:px-8 lg:px-12">
+      <p className="font-semibold text-black">Signal Garden</p>
+      <p className="md:text-center">
+        Bid package control for construction teams.
+      </p>
+      <p className="md:text-right">Public solicitation material only.</p>
+    </footer>
   );
 }
