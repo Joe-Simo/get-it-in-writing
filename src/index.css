@@ -1,18 +1,16 @@
 @import "tailwindcss" source(none);
 @source "./";
-@source "../index.html";
+@source "../app";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/instrument-sans";
-@import "@fontsource-variable/newsreader";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "Instrument Sans Variable", "Helvetica Neue", sans-serif;
-  --font-heading: "Instrument Sans Variable", "Helvetica Neue", sans-serif;
-  --font-editorial: "Newsreader Variable", Georgia, serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: var(--font-geist-sans), "Helvetica Neue", sans-serif;
+  --font-heading: var(--font-geist-sans), "Helvetica Neue", sans-serif;
+  --font-editorial: var(--font-geist-sans), "Helvetica Neue", sans-serif;
+  --font-mono: var(--font-geist-mono), SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --color-paper: #f2efe7;
   --color-paper-bright: #fbf9f3;
   --color-ink: #101511;
@@ -132,7 +130,7 @@
 .method-step h3 { margin-top: 2.4rem; font-family: var(--font-editorial); font-size: 2rem; font-weight: 540; line-height: .98; }
 .method-step p { margin-top: 1rem; max-width: 290px; color: rgb(16 21 17 / 62%); font-size: .9rem; line-height: 1.6; }
 
-.reliance-demo { display: grid; max-width: 1500px; margin: 0 auto; padding: clamp(4rem, 9vw, 9rem) clamp(1.25rem, 4vw, 4rem); align-items: center; gap: clamp(3rem, 7vw, 8rem); background: #101511; color: #f2efe7; }
+.reliance-anatomy { display: grid; max-width: 1500px; margin: 0 auto; padding: clamp(4rem, 9vw, 9rem) clamp(1.25rem, 4vw, 4rem); align-items: center; gap: clamp(3rem, 7vw, 8rem); background: #101511; color: #f2efe7; }
 .reliance-copy p:last-child { max-width: 560px; margin-top: 2rem; color: rgb(242 239 231 / 63%); font-size: 1rem; line-height: 1.7; }
 .reliance-sheet { padding: clamp(1.4rem, 3vw, 2.4rem); color: #101511; }
 .reliance-sheet::before, .reliance-sheet::after { background: #101511; }
@@ -482,7 +480,7 @@
   .method-rail { grid-template-columns: repeat(4, 1fr); }
   .method-step { border-right: 1px solid rgb(16 21 17 / 22%); border-bottom: 0; }
   .method-step:last-child { border-right: 0; }
-  .reliance-demo { grid-template-columns: .9fr 1.1fr; }
+  .reliance-anatomy { grid-template-columns: .9fr 1.1fr; }
 }
 
 @media (max-width: 767px) {

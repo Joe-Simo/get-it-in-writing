@@ -41,13 +41,14 @@ test("forced colors and a 200-percent-equivalent viewport keep the task usable",
   await page.setViewportSize({ width: 720, height: 450 });
   await page.emulateMedia({ forcedColors: "active" });
   await page.goto("/", { waitUntil: "domcontentloaded" });
+  const seal = page.locator(".promise-seal").first();
+  await expect(seal).toBeAttached();
   const layout = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
-    sealDisplay: getComputedStyle(document.querySelector(".promise-seal")!).display,
   }));
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth);
-  expect(layout.sealDisplay).toBe("none");
+  await expect(seal).toHaveCSS("display", "none");
   await expect(page.getByLabel("Official page")).toBeVisible();
   await expect(page.getByLabel("What must be true?")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check before I rely on it" })).toBeEnabled();

@@ -130,7 +130,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="reliance-demo" aria-labelledby="reliance-heading">
+        <section className="reliance-anatomy" aria-labelledby="reliance-heading">
           <div className="reliance-copy">
             <p className="ink-label">Not a summary. A boundary.</p>
             <h2 id="reliance-heading">The page can sound reassuring without promising the thing you need.</h2>

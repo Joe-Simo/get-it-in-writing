@@ -24,6 +24,29 @@ function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
 }
 
+const requiredAgentMailEvents = [
+  "message.received",
+  "message.sent",
+  "message.delivered",
+  "message.bounced",
+  "message.complained",
+  "message.rejected",
+];
+
+function webhookIsActive(
+  webhook: Record<string, unknown>,
+  expectedUrl: string,
+  inboxId: string,
+  inboxScoped: boolean,
+) {
+  const events = Array.isArray(webhook.event_types) ? webhook.event_types : [];
+  const inboxIds = Array.isArray(webhook.inbox_ids) ? webhook.inbox_ids : [];
+  return webhook.url === expectedUrl &&
+    webhook.enabled === true &&
+    (inboxScoped || inboxIds.includes(inboxId)) &&
+    requiredAgentMailEvents.every((event) => events.includes(event));
+}
+
 export const providers = internalAction({
   args: { publicUrl: v.string(), expectedAgentMailWebhookUrl: v.optional(v.string()) },
   returns: v.object({
@@ -99,21 +122,11 @@ export const providers = internalAction({
           if (webhooksResponse.ok) {
             const payload = record(await webhooksResponse.json());
             const webhooks = Array.isArray(payload.webhooks) ? payload.webhooks : [];
-            const requiredEvents = [
-              "message.received",
-              "message.sent",
-              "message.delivered",
-              "message.bounced",
-              "message.complained",
-              "message.rejected",
-            ];
             const matching = webhooks.map(record).filter((webhook) => webhook.url === expectedUrl);
             matchingAgentMailWebhooks = matching.length;
-            agentmailWebhookActive = matching.some((webhook) => {
-              const events = Array.isArray(webhook.event_types) ? webhook.event_types : [];
-              return webhook.enabled === true &&
-                requiredEvents.every((event) => events.includes(event));
-            });
+            agentmailWebhookActive = matching.some((webhook) =>
+              webhookIsActive(webhook, expectedUrl, inboxId, true));
+            agentmailReplyIngestion = agentmailWebhookActive;
           }
         }
       } catch (error) {
@@ -142,6 +155,7 @@ export const ensureAgentMailWebhook = internalAction({
     created: v.boolean(),
     active: v.boolean(),
     authenticated: v.boolean(),
+    scope: v.optional(v.literal("inbox")),
     failureStage: v.optional(v.string()),
     failureStatus: v.optional(v.number()),
   }),
@@ -160,10 +174,8 @@ export const ensureAgentMailWebhook = internalAction({
     }
     const baseUrl = (process.env.AGENTMAIL_BASE_URL ?? "https://api.agentmail.to/v0").replace(/\/$/, "");
     const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
-    const listResponse = await fetch(
-      `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/webhooks?limit=100`,
-      { headers },
-    );
+    const scopedBaseUrl = `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/webhooks`;
+    const listResponse = await fetch(`${scopedBaseUrl}?limit=100`, { headers });
     if (!listResponse.ok) {
       return {
         created: false,
@@ -175,31 +187,20 @@ export const ensureAgentMailWebhook = internalAction({
     }
     const payload = record(await listResponse.json());
     const webhooks = Array.isArray(payload.webhooks) ? payload.webhooks.map(record) : [];
-    const requiredEvents = [
-      "message.received",
-      "message.sent",
-      "message.delivered",
-      "message.bounced",
-      "message.complained",
-      "message.rejected",
-    ];
     const existing = webhooks.find((webhook) => webhook.url === expectedUrl);
     let webhook = existing;
     let created = false;
     if (!webhook) {
-      const createResponse = await fetch(
-        `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/webhooks`,
-        {
+      const createResponse = await fetch(scopedBaseUrl, {
           method: "POST",
           headers,
           body: JSON.stringify({
             url: expectedUrl,
-            event_types: requiredEvents,
+            event_types: requiredAgentMailEvents,
             client_id: "get-it-in-writing-production",
             headers: { Authorization: `Bearer ${webhookSecret}` },
           }),
-        },
-      );
+      });
       if (!createResponse.ok) {
         return {
           created: false,
@@ -221,10 +222,11 @@ export const ensureAgentMailWebhook = internalAction({
           failureStage: "identify",
         };
       }
-      const updateResponse = await fetch(
-        `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/webhooks/${encodeURIComponent(webhookId)}`,
-        { method: "PATCH", headers, body: JSON.stringify({ event_types: requiredEvents }) },
-      );
+      const updateResponse = await fetch(`${scopedBaseUrl}/${encodeURIComponent(webhookId)}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ event_types: requiredAgentMailEvents }),
+      });
       if (!updateResponse.ok) {
         return {
           created: false,
@@ -235,14 +237,11 @@ export const ensureAgentMailWebhook = internalAction({
         };
       }
       webhook = record(await updateResponse.json());
-      const authResponse = await fetch(
-        `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/webhooks/${encodeURIComponent(webhookId)}/headers`,
-        {
+      const authResponse = await fetch(`${scopedBaseUrl}/${encodeURIComponent(webhookId)}/headers`, {
           method: "PATCH",
           headers,
           body: JSON.stringify({ headers: { Authorization: `Bearer ${webhookSecret}` } }),
-        },
-      );
+      });
       if (!authResponse.ok) {
         return {
           created: false,
@@ -253,11 +252,11 @@ export const ensureAgentMailWebhook = internalAction({
         };
       }
     }
-    const events = Array.isArray(webhook.event_types) ? webhook.event_types : [];
     return {
       created,
-      active: webhook.enabled === true && requiredEvents.every((event) => events.includes(event)),
+      active: webhookIsActive(webhook, expectedUrl, inboxId, true),
       authenticated: true,
+      scope: "inbox" as const,
     };
   },
 });

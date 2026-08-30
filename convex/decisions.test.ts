@@ -431,3 +431,160 @@ test("a real reply produces one scoped outcome per requirement and permits at mo
     ),
   ).rejects.toThrow("one permitted follow-up");
 });
+
+test("unsupported decisions and bounced mail stop safely without inventing progress", async () => {
+  const { t, ownerId } = await createUserFixture();
+  const unsupportedId = await t.run((ctx) =>
+    ctx.db.insert("decisions", {
+      ownerId,
+      title: "Unsupported decision",
+      sourceUrl: "https://example.com/advice",
+      sourceHost: "example.com",
+      requirementText: "Tell me whether this medical treatment is safe.",
+      category: "other",
+      status: "scoping",
+      createdAt: 1,
+      updatedAt: 1,
+    }),
+  );
+  await t.mutation(internal.decisions.storeScope, {
+    decisionId: unsupportedId,
+    entityName: "Example",
+    category: "other",
+    supportedConsumerDomain: false,
+    unsupportedReason: "Medical and safety decisions are outside this product's scope.",
+    requirements: [],
+  });
+  const unsupported = await t.withIdentity({ subject: ownerId }).query(
+    api.decisions.getDetail,
+    { decisionId: unsupportedId },
+  );
+  expect(unsupported?.decision).toMatchObject({
+    status: "scoping",
+    operationalFailure: "unsupported_decision",
+    operationalMessage: "Medical and safety decisions are outside this product's scope.",
+  });
+  expect(unsupported?.requirements).toHaveLength(0);
+  expect(unsupported?.requests).toHaveLength(0);
+
+  const bounced = await t.run(async (ctx) => {
+    const decisionId = await ctx.db.insert("decisions", {
+      ownerId,
+      title: "Example stay",
+      sourceUrl: "https://example.com/stay",
+      sourceHost: "example.com",
+      requirementText: "No resort fee applies.",
+      category: "hotel",
+      status: "waiting",
+      createdAt: 2,
+      updatedAt: 2,
+    });
+    const requestId = await ctx.db.insert("confirmationRequests", {
+      decisionId,
+      ownerId,
+      requestToken: "GIW-BOUNCE1234",
+      recipient: "reservations@example.invalid",
+      recipientSource: "user_provided",
+      subject: "Fee confirmation [GIW-BOUNCE1234]",
+      body: "Please confirm whether a resort fee applies.",
+      followUpCount: 0,
+      status: "pending",
+      sentAt: 2,
+      createdAt: 2,
+      updatedAt: 2,
+    });
+    return { decisionId, requestId };
+  });
+  await t.mutation(internal.confirmations.applyOutboundStatus, {
+    requestId: bounced.requestId,
+    status: "bounced",
+    errorMessage: "The recipient server rejected the address.",
+  });
+  const bouncedDetail = await t.withIdentity({ subject: ownerId }).query(
+    api.decisions.getDetail,
+    { decisionId: bounced.decisionId },
+  );
+  expect(bouncedDetail?.decision).toMatchObject({
+    status: "waiting",
+    operationalFailure: "delivery_failed",
+    operationalMessage: "The recipient server rejected the address.",
+  });
+  expect(bouncedDetail?.requests[0]?.status).toBe("bounced");
+  expect(bouncedDetail?.proofCard).toBeNull();
+});
+
+test("a provider refusal becomes a scoped declined Proof Card", async () => {
+  const { t, ownerId } = await createUserFixture();
+  const fixture = await t.run(async (ctx) => {
+    const decisionId = await ctx.db.insert("decisions", {
+      ownerId,
+      title: "Example rental",
+      sourceUrl: "https://example.com/rental",
+      sourceHost: "example.com",
+      requirementText: "The unit permits two pets.",
+      category: "rental",
+      status: "interpreting_reply",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const requirementId = await ctx.db.insert("decisionRequirements", {
+      decisionId,
+      ownerId,
+      text: "The unit permits two pets.",
+      order: 0,
+      createdAt: 1,
+    });
+    const requestId = await ctx.db.insert("confirmationRequests", {
+      decisionId,
+      ownerId,
+      requestToken: "GIW-DECLINE123",
+      recipient: "leasing@example.com",
+      recipientSource: "official_page",
+      recipientSourceUrl: "https://example.com/contact",
+      subject: "Pet policy [GIW-DECLINE123]",
+      body: "Please confirm whether this unit permits two pets.",
+      followUpCount: 0,
+      status: "delivered",
+      sentAt: 2,
+      createdAt: 2,
+      updatedAt: 2,
+    });
+    const replyId = await ctx.db.insert("confirmationReplies", {
+      decisionId,
+      requestId,
+      messageId: "message_declined",
+      threadId: "thread_declined",
+      sender: "leasing@example.com",
+      subject: "Re: Pet policy",
+      body: "We cannot confirm pet approval before an application is reviewed.",
+      analysisBody: "We cannot confirm pet approval before an application is reviewed.",
+      receivedAt: 3,
+      createdAt: 3,
+    });
+    return { decisionId, requirementId, replyId };
+  });
+  await t.mutation(internal.confirmations.storeReplyInterpretation, {
+    replyId: fixture.replyId,
+    outcomes: [{
+      requirementId: fixture.requirementId,
+      verdict: "declined",
+      summary: "The provider declined to confirm the requirement before review.",
+      conditions: [],
+      supportingQuote: "We cannot confirm pet approval before an application is reviewed.",
+    }],
+    summary: "The provider declined to confirm the pet requirement.",
+  });
+  const detail = await t.withIdentity({ subject: ownerId }).query(
+    api.decisions.getDetail,
+    { decisionId: fixture.decisionId },
+  );
+  expect(detail?.decision.status).toBe("declined");
+  expect(detail?.proofCard).toMatchObject({
+    basis: "written_reply",
+    verdict: "declined",
+  });
+  expect(detail?.proofItems[0]).toMatchObject({
+    verdict: "declined",
+    requirementText: "The unit permits two pets.",
+  });
+});

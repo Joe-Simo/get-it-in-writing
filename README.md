@@ -38,9 +38,9 @@ the owner’s approval.
   source text before supportive claims are stored.
 - AgentMail sends the owner-approved message. Convex correlates real replies by
   provider thread and a unique request token, deduplicates them, and interprets
-  them requirement by requirement. The production deployment checks the single
-  configured inbox every minute; the authenticated webhook route can be enabled
-  when the AgentMail key has webhook-administration permission.
+  them requirement by requirement. An inbox-scoped AgentMail webhook delivers
+  events to an authenticated Convex HTTP action, which records the event before
+  scheduling reply interpretation.
 - Convex Static Hosting serves the production frontend at `convex.site`.
 
 All provider credentials stay in server-side Convex environment variables.
@@ -67,10 +67,10 @@ SITE_URL
 PUBLIC_APP_URL
 ```
 
-`AGENTMAIL_WEBHOOK_SECRET` is optional. When an AgentMail webhook is registered,
-its write-only custom `Authorization` header must use this value. The application
-does not require webhook administration to receive replies because its Convex
-cron performs retry-safe, idempotent inbox ingestion.
+`AGENTMAIL_WEBHOOK_SECRET` is required. The AgentMail webhook's write-only
+custom `Authorization` header must use this value. The AgentMail API key must
+allow webhook read, create, and update access in addition to inbox and message
+access.
 
 ## Verification
 

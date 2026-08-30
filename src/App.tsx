@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import LandingPage from "@/marketing/LandingPage";
 
 const BackendApp = lazy(() => import("@/backend/BackendApp"));
-const backendConfigured = Boolean(import.meta.env.VITE_CONVEX_URL);
+const backendConfigured = Boolean(process.env.NEXT_PUBLIC_CONVEX_URL);
 
 export default function App() {
   return (
@@ -43,7 +43,7 @@ function LocalSetupNotice() {
           Connect this project’s private decision backend.
         </h1>
         <p className="mt-5 text-black/60">
-          Set VITE_CONVEX_URL for this project before opening the Promise Wallet.
+          Set NEXT_PUBLIC_CONVEX_URL for this project before opening the Promise Wallet.
         </p>
       </div>
     </main>

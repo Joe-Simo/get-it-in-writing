@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import shaderSource from "@/visual/promise-seal.wgsl?raw";
 
 type PromiseSealProps = {
   className?: string;
@@ -16,8 +15,14 @@ export function PromiseSeal({ className = "", intensity = 1 }: PromiseSealProps)
     let disposed = false;
     let dispose: (() => void) | undefined;
 
-    void import("vgpu")
-      .then(async ({ clock, effect, frame, frameLoop, init, surface }) => {
+    void Promise.all([
+      import("vgpu"),
+      fetch("/promise-seal.wgsl").then(async (response) => {
+        if (!response.ok) throw new Error("Promise seal shader unavailable");
+        return await response.text();
+      }),
+    ])
+      .then(async ([{ clock, effect, frame, frameLoop, init, surface }, shaderSource]) => {
         if (disposed || !navigator.gpu) {
           setAvailable(false);
           return;

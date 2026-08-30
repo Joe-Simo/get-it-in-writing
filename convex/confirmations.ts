@@ -405,8 +405,8 @@ export const ingestAgentMailEvent = internalMutation({
     });
     if (args.event.event_type === "message.received" && args.event.message) {
       await ctx.scheduler.runAfter(0, internal.confirmations.onMessageReceived, {
-        message: args.event.message,
-        thread: args.event.thread ?? {},
+        message: asRecord(args.event.message as unknown),
+        thread: asRecord(args.event.thread as unknown),
         eventId: args.event.event_id,
       });
     }
@@ -492,130 +492,6 @@ export const onMessageReceived = internalMutation({
     });
     await ctx.scheduler.runAfter(0, internal.confirmationOpenAI.interpret, { replyId });
     return null;
-  },
-});
-
-export const monitoredReplyTargets = internalQuery({
-  args: {},
-  returns: v.array(v.object({
-    threadId: v.optional(v.string()),
-    requestToken: v.string(),
-  })),
-  handler: async (ctx) => {
-    const groups = await Promise.all(
-      (["pending", "sent", "delivered"] as const).map((status) =>
-        ctx.db
-          .query("confirmationRequests")
-          .withIndex("by_status_and_createdAt", (q) => q.eq("status", status))
-          .order("desc")
-          .take(100),
-      ),
-    );
-    return groups.flat().map((request) => ({
-      ...(request.threadId ? { threadId: request.threadId } : {}),
-      requestToken: request.requestToken,
-    }));
-  },
-});
-
-export const knownAgentMailDeliveries = internalQuery({
-  args: { deliveryIds: v.array(v.string()) },
-  returns: v.array(v.string()),
-  handler: async (ctx, args) => {
-    const known = await Promise.all(
-      args.deliveryIds.slice(0, 100).map(async (deliveryId) => {
-        const receipt = await ctx.db
-          .query("webhookReceipts")
-          .withIndex("by_provider_and_deliveryId", (q) =>
-            q.eq("provider", "agentmail").eq("deliveryId", deliveryId),
-          )
-          .first();
-        return receipt === null ? null : deliveryId;
-      }),
-    );
-    return known.filter((deliveryId): deliveryId is string => deliveryId !== null);
-  },
-});
-
-export const ingestPolledMessage = internalMutation({
-  args: { message: v.any(), eventId: v.string() },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const prior = await ctx.db
-      .query("webhookReceipts")
-      .withIndex("by_provider_and_deliveryId", (q) =>
-        q.eq("provider", "agentmail").eq("deliveryId", args.eventId),
-      )
-      .first();
-    if (prior !== null) return false;
-    await ctx.db.insert("webhookReceipts", {
-      provider: "agentmail",
-      deliveryId: args.eventId,
-      status: "accepted",
-      receivedAt: Date.now(),
-    });
-    await ctx.scheduler.runAfter(0, internal.confirmations.onMessageReceived, {
-      message: args.message,
-      thread: {},
-      eventId: args.eventId,
-    });
-    return true;
-  },
-});
-
-export const pollInbox = internalAction({
-  args: {},
-  returns: v.object({
-    reachable: v.boolean(),
-    scanned: v.number(),
-    matched: v.number(),
-  }),
-  handler: async (ctx) => {
-    const apiKey = process.env.AGENTMAIL_API_KEY;
-    const inboxId = process.env.AGENTMAIL_INBOX_ID;
-    if (!apiKey || !inboxId) return { reachable: false, scanned: 0, matched: 0 };
-    const targets = await ctx.runQuery(internal.confirmations.monitoredReplyTargets, {});
-    if (targets.length === 0) return { reachable: true, scanned: 0, matched: 0 };
-    const threadIds = new Set(targets.flatMap((target) => target.threadId ? [target.threadId] : []));
-    const requestTokens = new Set(targets.map((target) => target.requestToken));
-    const baseUrl = (process.env.AGENTMAIL_BASE_URL ?? "https://api.agentmail.to/v0").replace(/\/$/, "");
-    const authorization = { Authorization: `Bearer ${apiKey}` };
-    const listResponse = await fetch(
-      `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/messages?limit=100`,
-      { headers: authorization },
-    );
-    if (!listResponse.ok) return { reachable: false, scanned: 0, matched: 0 };
-    const payload = asRecord(await listResponse.json());
-    const messages = Array.isArray(payload.messages) ? payload.messages.map(asRecord) : [];
-    const candidates = messages.flatMap((summary) => {
-      const threadId = stringField(summary, "thread_id");
-      const messageId = stringField(summary, "message_id");
-      const subject = stringField(summary, "subject") ?? "";
-      const token = subject.match(/GIW-[A-Z0-9]{10}/i)?.[0]?.toUpperCase();
-      if (!messageId || !(
-        (threadId !== undefined && threadIds.has(threadId)) ||
-        (token !== undefined && requestTokens.has(token))
-      )) return [];
-      return [{ messageId, eventId: `poll:${messageId}` }];
-    });
-    const known = new Set(await ctx.runQuery(internal.confirmations.knownAgentMailDeliveries, {
-      deliveryIds: candidates.map((candidate) => candidate.eventId),
-    }));
-    let matched = 0;
-    for (const candidate of candidates) {
-      if (known.has(candidate.eventId)) continue;
-      const detailResponse = await fetch(
-        `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/messages/${encodeURIComponent(candidate.messageId)}`,
-        { headers: authorization },
-      );
-      if (!detailResponse.ok) continue;
-      const accepted = await ctx.runMutation(internal.confirmations.ingestPolledMessage, {
-        message: await detailResponse.json(),
-        eventId: candidate.eventId,
-      });
-      if (accepted) matched += 1;
-    }
-    return { reachable: true, scanned: messages.length, matched };
   },
 });
 

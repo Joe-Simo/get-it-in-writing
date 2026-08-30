@@ -157,7 +157,7 @@ export const onCrawlComplete = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const rawContext = args.context;
+    const rawContext: unknown = args.context;
     if (typeof rawContext !== "object" || rawContext === null) return null;
     const rawDecisionId = (rawContext as Record<string, unknown>).decisionId;
     if (typeof rawDecisionId !== "string") return null;
