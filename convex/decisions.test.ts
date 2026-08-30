@@ -1,11 +1,15 @@
 /// <reference types="vite/client" />
 
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 async function createUserFixture() {
   const t = convexTest(schema, modules);
@@ -20,14 +24,13 @@ async function createUserFixture() {
 
 test("a decision is private and starts bounded research without contacting anyone", async () => {
   const { t, ownerId, otherId } = await createUserFixture();
-  const decisionId = await t.withIdentity({ subject: ownerId }).mutation(
-    api.decisions.create,
-    {
+  const decisionId = await t
+    .withIdentity({ subject: ownerId })
+    .mutation(api.decisions.create, {
       sourceUrl: "https://www.example.com/hotel#rooms",
       requirementText: "We need connecting rooms, not merely adjacent rooms.",
       context: "December 12–14, two rooms",
-    },
-  );
+    });
 
   const detail = await t
     .withIdentity({ subject: ownerId })
@@ -184,12 +187,14 @@ test("verified official evidence can create a private source-backed Proof Card",
         sourceUrl: "https://example.com/rooms",
         sourceTitle: "Rooms",
         sourceExcerpt: "Connecting rooms can be reserved as a pair.",
-        evidence: [{
-          sourceUrl: "https://example.com/rooms",
-          sourceTitle: "Rooms",
-          sourceExcerpt: "Connecting rooms can be reserved as a pair.",
-          supports: true,
-        }],
+        evidence: [
+          {
+            sourceUrl: "https://example.com/rooms",
+            sourceTitle: "Rooms",
+            sourceExcerpt: "Connecting rooms can be reserved as a pair.",
+            supports: true,
+          },
+        ],
         order: 0,
       },
     ],
@@ -266,16 +271,21 @@ test("a consequential gap produces one editable request and requires user approv
         assessedScope: "Adjacent rooms only",
         sourceUrl: "https://example.com/rooms",
         sourceTitle: "Rooms",
-        sourceExcerpt: "Adjacent rooms may be requested, subject to availability.",
-        evidence: [{
-          sourceUrl: "https://example.com/rooms",
-          sourceTitle: "Rooms",
-          sourceExcerpt: "Adjacent rooms may be requested, subject to availability.",
-          supports: true,
-        }],
+        sourceExcerpt:
+          "Adjacent rooms may be requested, subject to availability.",
+        evidence: [
+          {
+            sourceUrl: "https://example.com/rooms",
+            sourceTitle: "Rooms",
+            sourceExcerpt:
+              "Adjacent rooms may be requested, subject to availability.",
+            supports: true,
+          },
+        ],
         ambiguity: {
           kind: "conditional",
-          explanation: "Availability is not guaranteed and connecting rooms are not established.",
+          explanation:
+            "Availability is not guaranteed and connecting rooms are not established.",
         },
         order: 0,
       },
@@ -291,7 +301,8 @@ test("a consequential gap produces one editable request and requires user approv
     fullyEstablished: false,
     summary: "The exact connecting-room requirement is not established.",
     draftSubject: "Connecting-room confirmation",
-    draftBody: "Please confirm whether the two rooms have an internal connecting door.",
+    draftBody:
+      "Please confirm whether the two rooms have an internal connecting door.",
   });
   expect(requestId).not.toBeNull();
   if (requestId === null) throw new Error("Expected a confirmation request");
@@ -320,69 +331,107 @@ test("the reliance map preserves conflict, scope mismatch, and missing evidence 
       title: "Example stay",
       sourceUrl: "https://example.com/stay",
       sourceHost: "example.com",
-      requirementText: "We need free parking, cancellation until 48 hours before arrival, and no resort fee.",
+      requirementText:
+        "We need free parking, cancellation until 48 hours before arrival, and no resort fee.",
       category: "hotel",
       status: "analyzing",
       createdAt: 1,
       updatedAt: 1,
     });
-    const texts = ["Free parking", "Cancellation until 48 hours before arrival", "No resort fee"];
+    const texts = [
+      "Free parking",
+      "Cancellation until 48 hours before arrival",
+      "No resort fee",
+    ];
     const requirementIds = [];
     for (const [order, text] of texts.entries()) {
-      requirementIds.push(await ctx.db.insert("decisionRequirements", {
-        decisionId,
-        ownerId,
-        text,
-        order,
-        createdAt: 1,
-      }));
+      requirementIds.push(
+        await ctx.db.insert("decisionRequirements", {
+          decisionId,
+          ownerId,
+          text,
+          order,
+          createdAt: 1,
+        }),
+      );
     }
     return { decisionId, requirementIds };
   });
   const [parkingId, cancellationId, feeId] = fixture.requirementIds;
-  if (!parkingId || !cancellationId || !feeId) throw new Error("Missing requirement fixture");
+  if (!parkingId || !cancellationId || !feeId)
+    throw new Error("Missing requirement fixture");
   await t.mutation(internal.decisions.storeAnalysis, {
     decisionId: fixture.decisionId,
     title: "Example stay",
     category: "hotel",
-    sources: [{
-      crawlId: "crawl_scoped",
-      url: "https://example.com/stay",
-      title: "Stay policies",
-      contentHash: "c".repeat(64),
-      excerpt: "Parking and cancellation policies.",
-      capturedAt: 2,
-    }],
+    sources: [
+      {
+        crawlId: "crawl_scoped",
+        url: "https://example.com/stay",
+        title: "Stay policies",
+        contentHash: "c".repeat(64),
+        excerpt: "Parking and cancellation policies.",
+        capturedAt: 2,
+      },
+    ],
     assessments: [
       {
         requirementId: parkingId,
         status: "conflicting",
         statement: "Official parking language conflicts.",
-        reason: "One passage says parking is included and another lists a daily charge.",
+        reason:
+          "One passage says parking is included and another lists a daily charge.",
         languageStrength: "conflicting",
         assessedScope: "Parking for this stay",
         sourceUrl: "https://example.com/stay",
         sourceTitle: "Stay policies",
         sourceExcerpt: "Complimentary parking is included.",
         evidence: [
-          { sourceUrl: "https://example.com/stay", sourceTitle: "Stay policies", sourceExcerpt: "Complimentary parking is included.", supports: true },
-          { sourceUrl: "https://example.com/fees", sourceTitle: "Fees", sourceExcerpt: "Self-parking is $25 nightly.", supports: false },
+          {
+            sourceUrl: "https://example.com/stay",
+            sourceTitle: "Stay policies",
+            sourceExcerpt: "Complimentary parking is included.",
+            supports: true,
+          },
+          {
+            sourceUrl: "https://example.com/fees",
+            sourceTitle: "Fees",
+            sourceExcerpt: "Self-parking is $25 nightly.",
+            supports: false,
+          },
         ],
-        ambiguity: { kind: "conflicting", explanation: "Two official passages materially disagree." },
+        ambiguity: {
+          kind: "conflicting",
+          explanation: "Two official passages materially disagree.",
+        },
         order: 0,
       },
       {
         requirementId: cancellationId,
         status: "scope_mismatch",
-        statement: "The published cancellation window applies to a different rate.",
-        reason: "The flexible-rate policy does not establish the selected prepaid rate.",
+        statement:
+          "The published cancellation window applies to a different rate.",
+        reason:
+          "The flexible-rate policy does not establish the selected prepaid rate.",
         languageStrength: "qualified",
         assessedScope: "Flexible rate, not prepaid rate",
         sourceUrl: "https://example.com/stay",
         sourceTitle: "Stay policies",
-        sourceExcerpt: "Flexible rates may be cancelled 48 hours before arrival.",
-        evidence: [{ sourceUrl: "https://example.com/stay", sourceTitle: "Stay policies", sourceExcerpt: "Flexible rates may be cancelled 48 hours before arrival.", supports: true }],
-        ambiguity: { kind: "scope_mismatch", explanation: "The rate scope differs." },
+        sourceExcerpt:
+          "Flexible rates may be cancelled 48 hours before arrival.",
+        evidence: [
+          {
+            sourceUrl: "https://example.com/stay",
+            sourceTitle: "Stay policies",
+            sourceExcerpt:
+              "Flexible rates may be cancelled 48 hours before arrival.",
+            supports: true,
+          },
+        ],
+        ambiguity: {
+          kind: "scope_mismatch",
+          explanation: "The rate scope differs.",
+        },
         order: 1,
       },
       {
@@ -393,7 +442,10 @@ test("the reliance map preserves conflict, scope mismatch, and missing evidence 
         languageStrength: "insufficient",
         assessedScope: "This stay",
         evidence: [],
-        ambiguity: { kind: "missing", explanation: "No adequate official language was found." },
+        ambiguity: {
+          kind: "missing",
+          explanation: "No adequate official language was found.",
+        },
         order: 2,
       },
     ],
@@ -401,22 +453,23 @@ test("the reliance map preserves conflict, scope mismatch, and missing evidence 
     fullyEstablished: false,
     summary: "All three requirements still need written clarification.",
     draftSubject: "Questions before I book",
-    draftBody: "Please confirm the parking charge, cancellation window, and whether a resort fee applies.",
+    draftBody:
+      "Please confirm the parking charge, cancellation window, and whether a resort fee applies.",
   });
-  const detail = await t.withIdentity({ subject: ownerId }).query(api.decisions.getDetail, {
-    decisionId: fixture.decisionId,
-  });
+  const detail = await t
+    .withIdentity({ subject: ownerId })
+    .query(api.decisions.getDetail, {
+      decisionId: fixture.decisionId,
+    });
   expect(detail?.assessments.map((assessment) => assessment.status)).toEqual([
     "conflicting",
     "scope_mismatch",
     "not_established",
   ]);
   expect(detail?.evidence).toHaveLength(3);
-  expect(detail?.ambiguities.map((ambiguity) => ambiguity.kind).sort()).toEqual([
-    "conflicting",
-    "missing",
-    "scope_mismatch",
-  ]);
+  expect(detail?.ambiguities.map((ambiguity) => ambiguity.kind).sort()).toEqual(
+    ["conflicting", "missing", "scope_mismatch"],
+  );
   expect(detail?.decision.status).toBe("awaiting_approval");
 });
 
@@ -471,7 +524,8 @@ test("a real reply produces one scoped outcome per requirement and permits at mo
       sender: "reservations@example.com",
       subject: "Re: Questions",
       body: "Yes, the rooms connect. Please ask the property directly about fees.",
-      analysisBody: "Yes, the rooms connect. Please ask the property directly about fees.",
+      analysisBody:
+        "Yes, the rooms connect. Please ask the property directly about fees.",
       receivedAt: 3,
       createdAt: 3,
     });
@@ -496,26 +550,36 @@ test("a real reply produces one scoped outcome per requirement and permits at mo
       },
     ],
     summary: "Connecting rooms are confirmed; the fee remains unanswered.",
-    suggestedFollowUp: "Could you please confirm whether any resort fee applies to this stay?",
+    suggestedFollowUp:
+      "Could you please confirm whether any resort fee applies to this stay?",
   });
-  const detail = await t.withIdentity({ subject: ownerId }).query(api.decisions.getDetail, {
-    decisionId: fixture.decisionId,
-  });
+  const detail = await t
+    .withIdentity({ subject: ownerId })
+    .query(api.decisions.getDetail, {
+      decisionId: fixture.decisionId,
+    });
   expect(detail?.decision.status).toBe("needs_followup");
   expect(detail?.outcomes).toHaveLength(2);
-  expect(detail?.proofItems.map((item) => item.verdict)).toEqual(["confirmed", "needs_followup"]);
-  expect(detail?.proofCard?.writtenMessage).toContain("Yes, the rooms connect.");
-  if (!detail?.proofCard) throw new Error("Expected Proof Card");
-  const followUpId = await t.withIdentity({ subject: ownerId }).mutation(
-    api.confirmations.createFollowUpDraft,
-    { proofCardId: detail.proofCard._id },
+  expect(detail?.proofItems.map((item) => item.verdict)).toEqual([
+    "confirmed",
+    "needs_followup",
+  ]);
+  expect(detail?.proofCard?.writtenMessage).toContain(
+    "Yes, the rooms connect.",
   );
+  if (!detail?.proofCard) throw new Error("Expected Proof Card");
+  const followUpId = await t
+    .withIdentity({ subject: ownerId })
+    .mutation(api.confirmations.createFollowUpDraft, {
+      proofCardId: detail.proofCard._id,
+    });
   expect(followUpId).toBeTruthy();
   await expect(
-    t.withIdentity({ subject: ownerId }).mutation(
-      api.confirmations.createFollowUpDraft,
-      { proofCardId: detail.proofCard._id },
-    ),
+    t
+      .withIdentity({ subject: ownerId })
+      .mutation(api.confirmations.createFollowUpDraft, {
+        proofCardId: detail.proofCard._id,
+      }),
   ).rejects.toThrow("one permitted follow-up");
 });
 
@@ -539,17 +603,18 @@ test("unsupported decisions and bounced mail stop safely without inventing progr
     entityName: "Example",
     category: "other",
     supportedConsumerDomain: false,
-    unsupportedReason: "Medical and safety decisions are outside this product's scope.",
+    unsupportedReason:
+      "Medical and safety decisions are outside this product's scope.",
     requirements: [],
   });
-  const unsupported = await t.withIdentity({ subject: ownerId }).query(
-    api.decisions.getDetail,
-    { decisionId: unsupportedId },
-  );
+  const unsupported = await t
+    .withIdentity({ subject: ownerId })
+    .query(api.decisions.getDetail, { decisionId: unsupportedId });
   expect(unsupported?.decision).toMatchObject({
     status: "scoping",
     operationalFailure: "unsupported_decision",
-    operationalMessage: "Medical and safety decisions are outside this product's scope.",
+    operationalMessage:
+      "Medical and safety decisions are outside this product's scope.",
   });
   expect(unsupported?.requirements).toHaveLength(0);
   expect(unsupported?.requests).toHaveLength(0);
@@ -587,10 +652,9 @@ test("unsupported decisions and bounced mail stop safely without inventing progr
     status: "bounced",
     errorMessage: "The recipient server rejected the address.",
   });
-  const bouncedDetail = await t.withIdentity({ subject: ownerId }).query(
-    api.decisions.getDetail,
-    { decisionId: bounced.decisionId },
-  );
+  const bouncedDetail = await t
+    .withIdentity({ subject: ownerId })
+    .query(api.decisions.getDetail, { decisionId: bounced.decisionId });
   expect(bouncedDetail?.decision).toMatchObject({
     status: "waiting",
     operationalFailure: "delivery_failed",
@@ -644,7 +708,8 @@ test("a provider refusal becomes a scoped declined Proof Card", async () => {
       sender: "leasing@example.com",
       subject: "Re: Pet policy",
       body: "We cannot confirm pet approval before an application is reviewed.",
-      analysisBody: "We cannot confirm pet approval before an application is reviewed.",
+      analysisBody:
+        "We cannot confirm pet approval before an application is reviewed.",
       receivedAt: 3,
       createdAt: 3,
     });
@@ -652,19 +717,22 @@ test("a provider refusal becomes a scoped declined Proof Card", async () => {
   });
   await t.mutation(internal.confirmations.storeReplyInterpretation, {
     replyId: fixture.replyId,
-    outcomes: [{
-      requirementId: fixture.requirementId,
-      verdict: "declined",
-      summary: "The provider declined to confirm the requirement before review.",
-      conditions: [],
-      supportingQuote: "We cannot confirm pet approval before an application is reviewed.",
-    }],
+    outcomes: [
+      {
+        requirementId: fixture.requirementId,
+        verdict: "declined",
+        summary:
+          "The provider declined to confirm the requirement before review.",
+        conditions: [],
+        supportingQuote:
+          "We cannot confirm pet approval before an application is reviewed.",
+      },
+    ],
     summary: "The provider declined to confirm the pet requirement.",
   });
-  const detail = await t.withIdentity({ subject: ownerId }).query(
-    api.decisions.getDetail,
-    { decisionId: fixture.decisionId },
-  );
+  const detail = await t
+    .withIdentity({ subject: ownerId })
+    .query(api.decisions.getDetail, { decisionId: fixture.decisionId });
   expect(detail?.decision.status).toBe("declined");
   expect(detail?.proofCard).toMatchObject({
     basis: "written_reply",
@@ -674,4 +742,236 @@ test("a provider refusal becomes a scoped declined Proof Card", async () => {
     verdict: "declined",
     requirementText: "The unit permits two pets.",
   });
+});
+
+test("inbound mail accepts only the expected sender and stores one reply without quoted history", async () => {
+  vi.stubEnv("AGENTMAIL_INBOX_ID", "inbox_get_it_in_writing");
+  const { t, ownerId } = await createUserFixture();
+  const fixture = await t.run(async (ctx) => {
+    const decisionId = await ctx.db.insert("decisions", {
+      ownerId,
+      title: "Example hotel",
+      sourceUrl: "https://example.com/hotel",
+      sourceHost: "example.com",
+      requirementText: "Connecting rooms must be guaranteed.",
+      category: "hotel",
+      status: "waiting",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const requestId = await ctx.db.insert("confirmationRequests", {
+      decisionId,
+      ownerId,
+      requestToken: "GIW-INBOUND123",
+      recipient: "reservations@example.com",
+      recipientSource: "official_page",
+      recipientSourceUrl: "https://example.com/contact",
+      subject: "Connecting rooms [GIW-INBOUND123]",
+      body: "Can you confirm connecting rooms?",
+      followUpCount: 0,
+      status: "delivered",
+      threadId: "thread_inbound",
+      sentAt: 2,
+      deliveredAt: 3,
+      createdAt: 2,
+      updatedAt: 3,
+    });
+    return { decisionId, requestId };
+  });
+
+  await t.mutation(internal.confirmations.onMessageReceived, {
+    eventId: "event_wrong_sender",
+    thread: {},
+    message: {
+      inbox_id: "inbox_get_it_in_writing",
+      thread_id: "thread_inbound",
+      message_id: "message_wrong_sender",
+      from: "someone-else@example.com",
+      subject: "Re: Connecting rooms",
+      extracted_text: "Yes.",
+    },
+  });
+
+  await t.mutation(internal.confirmations.onMessageReceived, {
+    eventId: "event_real_reply",
+    thread: {},
+    message: {
+      inbox_id: "inbox_get_it_in_writing",
+      thread_id: "thread_inbound",
+      message_id: "message_real_reply",
+      from: "Reservations <reservations@example.com>",
+      subject: "Re: Connecting rooms",
+      timestamp: "2026-08-30T18:30:00.000Z",
+      extracted_text: [
+        "Yes, we can guarantee connecting rooms when both rooms use the Family Connect rate.",
+        "",
+        "> Can you confirm connecting rooms?",
+      ].join("\n"),
+    },
+  });
+
+  await t.mutation(internal.confirmations.onMessageReceived, {
+    eventId: "event_duplicate_delivery",
+    thread: {},
+    message: {
+      inbox_id: "inbox_get_it_in_writing",
+      thread_id: "thread_inbound",
+      message_id: "message_real_reply",
+      from: "Reservations <reservations@example.com>",
+      subject: "Re: Connecting rooms",
+      extracted_text: "Duplicate delivery of the same provider message.",
+    },
+  });
+
+  const stored = await t.run(async (ctx) => ({
+    decision: await ctx.db.get("decisions", fixture.decisionId),
+    request: await ctx.db.get("confirmationRequests", fixture.requestId),
+    replies: await ctx.db
+      .query("confirmationReplies")
+      .withIndex("by_requestId_and_receivedAt", (q) =>
+        q.eq("requestId", fixture.requestId),
+      )
+      .collect(),
+  }));
+  expect(stored.decision?.status).toBe("reply_received");
+  expect(stored.request?.status).toBe("delivered");
+  expect(stored.replies).toHaveLength(1);
+  expect(stored.replies[0]).toMatchObject({
+    messageId: "message_real_reply",
+    sender: "Reservations <reservations@example.com>",
+    analysisBody:
+      "Yes, we can guarantee connecting rooms when both rooms use the Family Connect rate.",
+  });
+});
+
+test("source monitoring preserves both snapshots and deduplicates the same detected change", async () => {
+  const { t, ownerId, otherId } = await createUserFixture();
+  const fixture = await t.run(async (ctx) => {
+    const decisionId = await ctx.db.insert("decisions", {
+      ownerId,
+      title: "Example product",
+      sourceUrl: "https://example.com/product",
+      sourceHost: "example.com",
+      requirementText: "The written warranty must last two years.",
+      category: "product",
+      status: "confirmed",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const requirementId = await ctx.db.insert("decisionRequirements", {
+      decisionId,
+      ownerId,
+      text: "The written warranty lasts two years.",
+      order: 0,
+      createdAt: 1,
+    });
+    const proofCardId = await ctx.db.insert("proofCards", {
+      decisionId,
+      ownerId,
+      basis: "official_source",
+      verdict: "confirmed",
+      exactRequirement: "The written warranty lasts two years.",
+      summary: "The original policy stated a two-year warranty.",
+      conditions: [],
+      sourceUrls: ["https://example.com/product"],
+      sourceExcerpts: ["Includes a two-year written warranty."],
+      createdAt: 2,
+    });
+    await ctx.db.insert("proofItems", {
+      proofCardId,
+      decisionId,
+      requirementId,
+      verdict: "confirmed",
+      requirementText: "The written warranty lasts two years.",
+      summary: "The original policy stated a two-year warranty.",
+      conditions: [],
+      sourceUrls: ["https://example.com/product"],
+      sourceExcerpts: ["Includes a two-year written warranty."],
+      order: 0,
+      createdAt: 2,
+    });
+    await ctx.db.insert("sourceDocuments", {
+      decisionId,
+      crawlId: "crawl_original",
+      url: "https://example.com/product",
+      title: "Warranty",
+      contentHash: "a".repeat(64),
+      excerpt: "Includes a two-year written warranty.",
+      capturedAt: 2,
+    });
+    const monitorId = await ctx.db.insert("changeMonitors", {
+      decisionId,
+      ownerId,
+      active: true,
+      intervalHours: 24,
+      nextCheckAt: 3,
+      createdAt: 2,
+      updatedAt: 2,
+    });
+    return { decisionId, monitorId, proofCardId };
+  });
+
+  const changedResult = {
+    url: "https://example.com/product",
+    priorHash: "a".repeat(64),
+    priorExcerpt: "Includes a two-year written warranty.",
+    currentHash: "b".repeat(64),
+    currentExcerpt: "Includes a one-year written warranty.",
+    title: "Warranty",
+  };
+  await t.mutation(internal.changes.recordCheck, {
+    decisionId: fixture.decisionId,
+    monitorId: fixture.monitorId,
+    checkedAt: 10,
+    results: [changedResult],
+  });
+  await t.mutation(internal.changes.recordCheck, {
+    decisionId: fixture.decisionId,
+    monitorId: fixture.monitorId,
+    checkedAt: 11,
+    results: [changedResult],
+  });
+
+  const stored = await t.run(async (ctx) => ({
+    card: await ctx.db.get("proofCards", fixture.proofCardId),
+    sources: await ctx.db
+      .query("sourceDocuments")
+      .withIndex("by_decisionId_and_url", (q) =>
+        q.eq("decisionId", fixture.decisionId),
+      )
+      .collect(),
+    changes: await ctx.db
+      .query("sourceChanges")
+      .withIndex("by_decisionId_and_detectedAt", (q) =>
+        q.eq("decisionId", fixture.decisionId),
+      )
+      .collect(),
+  }));
+  expect(stored.card?.sourceExcerpts).toEqual([
+    "Includes a two-year written warranty.",
+  ]);
+  expect(stored.sources.map((source) => source.contentHash).sort()).toEqual([
+    "a".repeat(64),
+    "b".repeat(64),
+  ]);
+  expect(stored.changes).toHaveLength(1);
+  expect(stored.changes[0]).toMatchObject({
+    previousExcerpt: "Includes a two-year written warranty.",
+    currentExcerpt: "Includes a one-year written warranty.",
+    status: "open",
+  });
+
+  if (!stored.changes[0]) throw new Error("Expected one source change");
+  await expect(
+    t.withIdentity({ subject: otherId }).mutation(api.changes.acknowledge, {
+      sourceChangeId: stored.changes[0]._id,
+    }),
+  ).rejects.toThrow("private");
+  await t.withIdentity({ subject: ownerId }).mutation(api.changes.acknowledge, {
+    sourceChangeId: stored.changes[0]._id,
+  });
+  const acknowledged = await t.run((ctx) =>
+    ctx.db.get("sourceChanges", stored.changes[0]._id),
+  );
+  expect(acknowledged?.status).toBe("acknowledged");
 });

@@ -1,6 +1,11 @@
 "use node";
 
-import { FirecrawlClient, type CrawledPage } from "@firecrawl/firecrawl-convex";
+import {
+  FirecrawlClient,
+  type CrawledPage,
+  type FirecrawlDocument,
+  type SearchResult,
+} from "@firecrawl/firecrawl-convex";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { v } from "convex/values";
@@ -8,6 +13,10 @@ import { z } from "zod";
 import { components, internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import {
+  extractVerifiedOfficialContacts,
+  type OfficialContactPage,
+} from "./lib/officialContact";
 
 const firecrawl = new FirecrawlClient(components.firecrawl);
 
@@ -69,7 +78,12 @@ const relianceMap = z.object({
       statement: z.string(),
       reason: z.string(),
       assessedScope: z.string(),
-      languageStrength: z.enum(["direct", "qualified", "conflicting", "insufficient"]),
+      languageStrength: z.enum([
+        "direct",
+        "qualified",
+        "conflicting",
+        "insufficient",
+      ]),
       evidence: z.array(
         z.object({
           sourceUrl: z.string(),
@@ -112,15 +126,22 @@ function canonicalUrl(value: string) {
   }
 }
 
-function titleOf(page: CrawledPage) {
+type ResearchPage = Pick<CrawledPage, "url" | "markdown" | "metadata">;
+
+function titleOf(page: ResearchPage) {
   const title = page.metadata?.title;
   return typeof title === "string" ? title.slice(0, 240) : undefined;
 }
 
-function verifiedExcerpt(page: CrawledPage | undefined, candidate: string | null) {
+function verifiedExcerpt(
+  page: ResearchPage | undefined,
+  candidate: string | null,
+) {
   if (!page?.markdown || !candidate) return undefined;
   const cleaned = candidate.trim().slice(0, 900);
-  return compact(page.markdown).includes(compact(cleaned)) ? cleaned : undefined;
+  return compact(page.markdown).includes(compact(cleaned))
+    ? cleaned
+    : undefined;
 }
 
 function emailContext(markdown: string, email: string) {
@@ -131,8 +152,62 @@ function emailContext(markdown: string, email: string) {
   return markdown.slice(start, end).replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
+function normalizedHost(value: string) {
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function searchPage(
+  result: SearchResult | FirecrawlDocument,
+  officialHost: string,
+): ResearchPage | undefined {
+  const record = result as Record<string, unknown>;
+  const metadata =
+    typeof record.metadata === "object" && record.metadata !== null
+      ? (record.metadata as Record<string, unknown>)
+      : undefined;
+  const url =
+    typeof record.url === "string"
+      ? record.url
+      : typeof metadata?.url === "string"
+        ? metadata.url
+        : typeof metadata?.sourceURL === "string"
+          ? metadata.sourceURL
+          : "";
+  const markdown =
+    typeof record.markdown === "string" ? record.markdown : undefined;
+  if (
+    !url ||
+    !markdown ||
+    markdown.trim().length <= 40 ||
+    normalizedHost(url) !== officialHost
+  ) {
+    return undefined;
+  }
+  return {
+    url,
+    markdown,
+    metadata: {
+      ...(metadata ?? {}),
+      ...(typeof record.title === "string" ? { title: record.title } : {}),
+    },
+  };
+}
+
+function asContactPages(pages: ResearchPage[]): OfficialContactPage[] {
+  return pages.map((page) => ({
+    url: page.url,
+    ...(page.markdown ? { markdown: page.markdown } : {}),
+    ...(titleOf(page) ? { title: titleOf(page) } : {}),
+  }));
+}
+
 function safeErrorMeta(error: unknown) {
-  if (typeof error !== "object" || error === null) return { name: "UnknownError" };
+  if (typeof error !== "object" || error === null)
+    return { name: "UnknownError" };
   const record = error as Record<string, unknown>;
   return {
     name: typeof record.name === "string" ? record.name : "Error",
@@ -143,8 +218,13 @@ function safeErrorMeta(error: unknown) {
 }
 
 async function sha256(value: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 export const scope = internalAction({
@@ -179,38 +259,71 @@ export const scope = internalAction({
       if (!parsed) throw new Error("No structured decision scope");
       await ctx.runMutation(internal.decisions.storeScope, {
         decisionId: args.decisionId,
-        entityName: bounded(parsed.entityName, 120, context.decision.sourceHost),
+        entityName: bounded(
+          parsed.entityName,
+          120,
+          context.decision.sourceHost,
+        ),
         category: parsed.category,
         supportedConsumerDomain: parsed.supportedConsumerDomain,
         ...(parsed.unsupportedReason
-          ? { unsupportedReason: bounded(parsed.unsupportedReason, 500, "This decision is outside the supported consumer scope.") }
+          ? {
+              unsupportedReason: bounded(
+                parsed.unsupportedReason,
+                500,
+                "This decision is outside the supported consumer scope.",
+              ),
+            }
           : {}),
         requirements: parsed.requirements.slice(0, 10).map((requirement) => ({
-          text: bounded(requirement.text, 800, context.decision.requirementText),
-          normalizedMeaning: bounded(requirement.normalizedMeaning, 800, requirement.text),
+          text: bounded(
+            requirement.text,
+            800,
+            context.decision.requirementText,
+          ),
+          normalizedMeaning: bounded(
+            requirement.normalizedMeaning,
+            800,
+            requirement.text,
+          ),
           importance: requirement.importance,
-          scope: bounded(requirement.scope, 800, context.decision.context ?? "This decision"),
-          dates: requirement.dates.map((date) => date.trim().slice(0, 120)).filter(Boolean).slice(0, 10),
-          quantities: requirement.quantities.map((quantity) => quantity.trim().slice(0, 120)).filter(Boolean).slice(0, 10),
+          scope: bounded(
+            requirement.scope,
+            800,
+            context.decision.context ?? "This decision",
+          ),
+          dates: requirement.dates
+            .map((date) => date.trim().slice(0, 120))
+            .filter(Boolean)
+            .slice(0, 10),
+          quantities: requirement.quantities
+            .map((quantity) => quantity.trim().slice(0, 120))
+            .filter(Boolean)
+            .slice(0, 10),
           hardConstraint: requirement.hardConstraint,
         })),
       });
     } catch (error) {
-      console.error("Get It in Writing decision scoping failed", safeErrorMeta(error));
+      console.error(
+        "Get It in Writing decision scoping failed",
+        safeErrorMeta(error),
+      );
       await ctx.runMutation(internal.decisions.storeScope, {
         decisionId: args.decisionId,
         entityName: context.decision.sourceHost,
         category: "other",
         supportedConsumerDomain: true,
-        requirements: [{
-          text: context.decision.requirementText,
-          normalizedMeaning: context.decision.requirementText,
-          importance: "critical",
-          scope: context.decision.context ?? "This decision",
-          dates: [],
-          quantities: [],
-          hardConstraint: true,
-        }],
+        requirements: [
+          {
+            text: context.decision.requirementText,
+            normalizedMeaning: context.decision.requirementText,
+            importance: "critical",
+            scope: context.decision.context ?? "This decision",
+            dates: [],
+            quantities: [],
+            hardConstraint: true,
+          },
+        ],
       });
     }
     return null;
@@ -235,19 +348,61 @@ export const analyze = internalAction({
       const pageResult = await firecrawl.listPages(
         ctx as unknown as Parameters<FirecrawlClient["listPages"]>[0],
         {
-        crawlId: args.crawlId,
-        paginationOpts: {
-          cursor: null,
-          numItems: 25,
-          maximumRowsRead: 25,
-          maximumBytesRead: 2_000_000,
-        },
+          crawlId: args.crawlId,
+          paginationOpts: {
+            cursor: null,
+            numItems: 25,
+            maximumRowsRead: 25,
+            maximumBytesRead: 2_000_000,
+          },
         },
       );
-      const pages = pageResult.page
-        .filter((page) => typeof page.markdown === "string" && page.markdown.trim().length > 40)
+      let pages: ResearchPage[] = pageResult.page
+        .filter(
+          (page) =>
+            typeof page.markdown === "string" &&
+            page.markdown.trim().length > 40,
+        )
         .slice(0, 25);
       if (pages.length === 0) throw new Error("No readable official pages");
+
+      const officialHost = normalizedHost(context.decision.sourceUrl);
+      if (extractVerifiedOfficialContacts(asContactPages(pages)).length === 0) {
+        try {
+          const contactResults = await firecrawl.search(
+            ctx,
+            `site:${officialHost} official contact reservations booking support email`,
+            {
+              sources: ["web"],
+              includeDomains: [officialHost],
+              limit: 5,
+              scrapeOptions: {
+                formats: ["markdown"],
+                onlyMainContent: true,
+                maxAge: 0,
+                removeBase64Images: true,
+              },
+            },
+          );
+          const contactPages = (contactResults.web ?? []).flatMap((result) => {
+            const page = searchPage(result, officialHost);
+            return page ? [page] : [];
+          });
+          pages = [
+            ...new Map(
+              [...pages, ...contactPages].map((page) => [
+                canonicalUrl(page.url),
+                page,
+              ]),
+            ).values(),
+          ].slice(0, 25);
+        } catch (error) {
+          console.warn(
+            "Get It in Writing official contact search failed",
+            safeErrorMeta(error),
+          );
+        }
+      }
 
       const evidence = pages
         .map((page, index) => {
@@ -277,9 +432,14 @@ export const analyze = internalAction({
       const parsed = response.output_parsed;
       if (!parsed) throw new Error("No structured reliance map");
 
-      const pagesByUrl = new Map(pages.map((page) => [canonicalUrl(page.url), page]));
+      const pagesByUrl = new Map(
+        pages.map((page) => [canonicalUrl(page.url), page]),
+      );
       const assessmentByRequirement = new Map(
-        parsed.assessments.map((assessment) => [assessment.requirementIndex, assessment]),
+        parsed.assessments.map((assessment) => [
+          assessment.requirementIndex,
+          assessment,
+        ]),
       );
       const assessments = context.requirements.map((requirement, index) => {
         const candidate = assessmentByRequirement.get(index);
@@ -288,37 +448,48 @@ export const analyze = internalAction({
             requirementId: requirement._id,
             status: "not_established" as const,
             statement: requirement.text,
-            reason: "No supporting language was located in the official pages that were checked.",
+            reason:
+              "No supporting language was located in the official pages that were checked.",
             languageStrength: "insufficient" as const,
             assessedScope: requirement.scope ?? requirement.text,
             evidence: [],
             ambiguity: {
               kind: "missing" as const,
-              explanation: "No supporting language was located in the official pages that were checked.",
+              explanation:
+                "No supporting language was located in the official pages that were checked.",
             },
             order: index,
           };
         }
-        const evidence = candidate.evidence.flatMap((item) => {
-          const page = pagesByUrl.get(canonicalUrl(item.sourceUrl));
-          const excerpt = verifiedExcerpt(page, item.sourceExcerpt);
-          if (!page || !excerpt) return [];
-          return [{
-            sourceUrl: page.url,
-            ...(titleOf(page) ? { sourceTitle: titleOf(page) } : {}),
-            sourceExcerpt: excerpt,
-            supports: item.supports,
-          }];
-        }).slice(0, 6);
+        const evidence = candidate.evidence
+          .flatMap((item) => {
+            const page = pagesByUrl.get(canonicalUrl(item.sourceUrl));
+            const excerpt = verifiedExcerpt(page, item.sourceExcerpt);
+            if (!page || !excerpt) return [];
+            return [
+              {
+                sourceUrl: page.url,
+                ...(titleOf(page) ? { sourceTitle: titleOf(page) } : {}),
+                sourceExcerpt: excerpt,
+                supports: item.supports,
+              },
+            ];
+          })
+          .slice(0, 6);
         const hasVerifiedEvidence = evidence.length > 0;
-        const hasConflict = evidence.some((item) => item.supports) && evidence.some((item) => !item.supports);
-        const status = candidate.status === "not_established"
-          ? "not_established" as const
-          : candidate.status === "conflicting"
-            ? (hasConflict ? "conflicting" as const : "not_established" as const)
-            : hasVerifiedEvidence
-              ? candidate.status
-              : "not_established" as const;
+        const hasConflict =
+          evidence.some((item) => item.supports) &&
+          evidence.some((item) => !item.supports);
+        const status =
+          candidate.status === "not_established"
+            ? ("not_established" as const)
+            : candidate.status === "conflicting"
+              ? hasConflict
+                ? ("conflicting" as const)
+                : ("not_established" as const)
+              : hasVerifiedEvidence
+                ? candidate.status
+                : ("not_established" as const);
         const primaryEvidence = evidence[0];
         return {
           requirementId: requirement._id,
@@ -327,23 +498,36 @@ export const analyze = internalAction({
           reason: hasVerifiedEvidence
             ? candidate.reason.slice(0, 1_000)
             : "No exact supporting language was verified in the official pages that were checked.",
-          languageStrength: status === "not_established" ? "insufficient" as const : candidate.languageStrength,
-          assessedScope: bounded(candidate.assessedScope, 800, requirement.scope ?? requirement.text),
+          languageStrength:
+            status === "not_established"
+              ? ("insufficient" as const)
+              : candidate.languageStrength,
+          assessedScope: bounded(
+            candidate.assessedScope,
+            800,
+            requirement.scope ?? requirement.text,
+          ),
           evidence,
-          ambiguity: status === "established" ? undefined : {
-            kind: status === "conditional"
-              ? "conditional" as const
-              : status === "conflicting"
-                ? "conflicting" as const
-                : status === "scope_mismatch"
-                  ? "scope_mismatch" as const
-                  : "missing" as const,
-            explanation: candidate.reason.slice(0, 1_000),
-          },
+          ambiguity:
+            status === "established"
+              ? undefined
+              : {
+                  kind:
+                    status === "conditional"
+                      ? ("conditional" as const)
+                      : status === "conflicting"
+                        ? ("conflicting" as const)
+                        : status === "scope_mismatch"
+                          ? ("scope_mismatch" as const)
+                          : ("missing" as const),
+                  explanation: candidate.reason.slice(0, 1_000),
+                },
           ...(primaryEvidence
             ? {
                 sourceUrl: primaryEvidence.sourceUrl,
-                ...(primaryEvidence.sourceTitle ? { sourceTitle: primaryEvidence.sourceTitle } : {}),
+                ...(primaryEvidence.sourceTitle
+                  ? { sourceTitle: primaryEvidence.sourceTitle }
+                  : {}),
                 sourceExcerpt: primaryEvidence.sourceExcerpt,
               }
             : {}),
@@ -355,42 +539,68 @@ export const analyze = internalAction({
         const email = contact.email.trim().toLowerCase();
         if (!emailPattern.test(email)) return [];
         const page = pagesByUrl.get(canonicalUrl(contact.sourceUrl));
-        const excerpt = page?.markdown ? emailContext(page.markdown, email) : undefined;
+        const excerpt = page?.markdown
+          ? emailContext(page.markdown, email)
+          : undefined;
         if (!page || !excerpt) return [];
-        return [{
-          email,
-          label: bounded(contact.label, 100, "Official contact"),
-          sourceUrl: page.url,
-          sourceExcerpt: excerpt,
-        }];
+        return [
+          {
+            email,
+            label: bounded(contact.label, 100, "Official contact"),
+            sourceUrl: page.url,
+            sourceExcerpt: excerpt,
+          },
+        ];
       });
-      const uniqueContacts = [...new Map(contacts.map((contact) => [contact.email, contact])).values()].slice(0, 10);
+      const extractedContacts = extractVerifiedOfficialContacts(
+        asContactPages(pages),
+      );
+      const uniqueContacts = [
+        ...new Map(
+          [...contacts, ...extractedContacts].map((contact) => [
+            contact.email,
+            contact,
+          ]),
+        ).values(),
+      ].slice(0, 10);
       const capturedAt = Date.now();
-      const sources = await Promise.all(pages.map(async (page) => {
-        const markdown = page.markdown ?? "";
-        return {
-          crawlId: args.crawlId,
-          url: page.url,
-          ...(titleOf(page) ? { title: titleOf(page) } : {}),
-          contentHash: await sha256(markdown),
-          excerpt: markdown.replace(/\s+/g, " ").trim().slice(0, 500),
-          capturedAt,
-        };
-      }));
+      const sources = await Promise.all(
+        pages.map(async (page) => {
+          const markdown = page.markdown ?? "";
+          return {
+            crawlId: args.crawlId,
+            url: page.url,
+            ...(titleOf(page) ? { title: titleOf(page) } : {}),
+            contentHash: await sha256(markdown),
+            excerpt: markdown.replace(/\s+/g, " ").trim().slice(0, 500),
+            capturedAt,
+          };
+        }),
+      );
       await ctx.runMutation(internal.decisions.storeAnalysis, {
         decisionId: args.decisionId,
-        title: bounded(parsed.title, 120, `Decision about ${context.decision.sourceHost}`),
+        title: bounded(
+          parsed.title,
+          120,
+          `Decision about ${context.decision.sourceHost}`,
+        ),
         category: parsed.category,
         sources,
         assessments,
         contacts: uniqueContacts,
-        fullyEstablished: assessments.every((assessment) => assessment.status === "established"),
+        fullyEstablished: assessments.every(
+          (assessment) => assessment.status === "established",
+        ),
         summary: bounded(
           parsed.summary,
           1_000,
           "The official pages were checked against the exact requirement.",
         ),
-        draftSubject: bounded(parsed.draftSubject, 160, "A written confirmation before I rely on this"),
+        draftSubject: bounded(
+          parsed.draftSubject,
+          160,
+          "A written confirmation before I rely on this",
+        ),
         draftBody: bounded(
           parsed.draftBody,
           4_000,
@@ -398,11 +608,15 @@ export const analyze = internalAction({
         ),
       });
     } catch (error) {
-      console.error("Get It in Writing reliance analysis failed", safeErrorMeta(error));
+      console.error(
+        "Get It in Writing reliance analysis failed",
+        safeErrorMeta(error),
+      );
       await ctx.runMutation(internal.decisions.recordOperationalFailure, {
         decisionId: args.decisionId,
         kind: "analysis_failed",
-        message: "The sources were collected, but the reliance map could not be completed. Nothing was sent. Try again.",
+        message:
+          "The sources were collected, but the reliance map could not be completed. Nothing was sent. Try again.",
       });
     }
     return null;

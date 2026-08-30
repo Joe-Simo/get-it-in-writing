@@ -16,6 +16,7 @@ import type * as crons from "../crons.js";
 import type * as decisions from "../decisions.js";
 import type * as http from "../http.js";
 import type * as lib_decisionState from "../lib/decisionState.js";
+import type * as lib_officialContact from "../lib/officialContact.js";
 import type * as lib_validation from "../lib/validation.js";
 import type * as model_auth from "../model/auth.js";
 import type * as readiness from "../readiness.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   decisions: typeof decisions;
   http: typeof http;
   "lib/decisionState": typeof lib_decisionState;
+  "lib/officialContact": typeof lib_officialContact;
   "lib/validation": typeof lib_validation;
   "model/auth": typeof model_auth;
   readiness: typeof readiness;
