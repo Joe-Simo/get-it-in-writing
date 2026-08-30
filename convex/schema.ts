@@ -26,6 +26,7 @@ export default defineSchema({
     name: v.string(),
     slug: v.string(),
     ownerId: v.id("users"),
+    reviewEmail: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_slug", ["slug"])

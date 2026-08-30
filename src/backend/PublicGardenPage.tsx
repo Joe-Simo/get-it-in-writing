@@ -91,7 +91,9 @@ function GardenView({
   brief: PublicBrief | null;
   process: PublicProcess;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(nodes[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    nodes[0]?.id ?? null,
+  );
   const selected = nodes.find((node) => node.id === selectedId) ?? nodes[0];
   const displayBrief = brief
     ? {
@@ -108,10 +110,16 @@ function GardenView({
       </a>
       <div className="mx-auto max-w-[1500px] px-4 pb-16 pt-4 md:px-8 md:pt-8">
         <header className="flex items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-2 text-sm text-white/55 transition hover:text-white">
+          <Link
+            to="/"
+            className="flex items-center gap-2 text-sm text-white/55 transition hover:text-white"
+          >
             <ArrowLeft className="size-4" /> Signal Garden
           </Link>
-          <Badge variant="outline" className="border-white/30 bg-transparent text-white">
+          <Badge
+            variant="outline"
+            className="border-white/30 bg-transparent text-white"
+          >
             Public read-only decision
           </Badge>
         </header>
@@ -131,7 +139,11 @@ function GardenView({
                 <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/65">
                   {displayBrief.summary}
                 </p>
-                <Button asChild variant="outline" className="mt-5 rounded-full border-white/30 bg-transparent text-white hover:bg-white/10">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="mt-5 rounded-full border-white/30 bg-transparent text-white hover:bg-white/10"
+                >
                   <a href="#decision-brief">
                     Read the complete brief <ArrowDown className="size-4" />
                   </a>
@@ -144,14 +156,24 @@ function GardenView({
                 [process.sourceCount, "trusted sources"],
                 [process.claimCount, "linked claims"],
               ].map(([value, label]) => (
-                <div key={label} className="border-b border-r border-white/20 bg-[#0a0d0b] p-4">
-                  <dd className="text-3xl font-semibold tracking-[-.05em]">{value}</dd>
-                  <dt className="mt-2 text-[10px] font-semibold uppercase tracking-[.15em] text-white/60">{label}</dt>
+                <div
+                  key={label}
+                  className="border-b border-r border-white/20 bg-[#0a0d0b] p-4"
+                >
+                  <dd className="text-3xl font-semibold tracking-[-.05em]">
+                    {value}
+                  </dd>
+                  <dt className="mt-2 text-[10px] font-semibold uppercase tracking-[.15em] text-white/60">
+                    {label}
+                  </dt>
                 </div>
               ))}
             </dl>
             <p className="mt-6 max-w-xl text-xs leading-relaxed text-white/52">
-              Public output includes only the decision brief, claims, sources, and privacy-safe process proof. Team identities, email addresses, message contents, private notes, and webhook records are excluded server-side.
+              Public output includes only the decision brief, claims, sources,
+              and privacy-safe process proof. Team identities, email addresses,
+              message contents, private notes, and webhook records are excluded
+              server-side.
             </p>
           </div>
 
@@ -168,10 +190,19 @@ function GardenView({
               <article className="mt-4 grid gap-3 border-t border-white/20 pt-4 sm:grid-cols-[130px_1fr]">
                 <p className="eyebrow text-white/60">Selected evidence</p>
                 <div>
-                  <h2 className="text-xl font-semibold tracking-[-.02em]">{selected.label}</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-white/60">{selected.detail}</p>
+                  <h2 className="text-xl font-semibold tracking-[-.02em]">
+                    {selected.label}
+                  </h2>
+                  <p className="mt-2 text-sm leading-relaxed text-white/60">
+                    {selected.detail}
+                  </p>
                   {selected.url && (
-                    <a href={selected.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-[#c7ff4a]">
+                    <a
+                      href={selected.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-flex items-center gap-2 text-sm text-[#c7ff4a]"
+                    >
                       Inspect source <ExternalLink className="size-3.5" />
                     </a>
                   )}
@@ -182,7 +213,9 @@ function GardenView({
         </section>
       </div>
 
-      {displayBrief && <DecisionBrief brief={displayBrief} nodes={nodes} edges={edges} />}
+      {displayBrief && (
+        <DecisionBrief brief={displayBrief} nodes={nodes} edges={edges} />
+      )}
       <ProcessProof process={process} />
     </main>
   );
@@ -219,23 +252,62 @@ function DecisionBrief({
   );
 
   return (
-    <section id="decision-brief" className="scroll-mt-8 bg-[#f2eee5] px-5 py-20 text-[#111612] md:px-8 lg:px-12 lg:py-28">
+    <section
+      id="decision-brief"
+      className="scroll-mt-8 bg-[#f2eee5] px-5 py-20 text-[#111612] md:px-8 lg:px-12 lg:py-28"
+    >
       <div className="mx-auto grid max-w-[1400px] gap-12 lg:grid-cols-[.62fr_1.38fr]">
         <div>
           <p className="eyebrow text-[#4d6b31]">Complete decision brief</p>
-          <h2 className="mt-5 text-5xl font-semibold leading-[.92] tracking-[-.055em] md:text-7xl">{brief.title}</h2>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-black/65">{brief.summary}</p>
+          <h2 className="mt-5 text-5xl font-semibold leading-[.92] tracking-[-.055em] md:text-7xl">
+            {brief.title}
+          </h2>
+          <p className="mt-6 max-w-xl text-lg leading-relaxed text-black/65">
+            {brief.summary}
+          </p>
         </div>
         <div className="border-t border-black/20 py-2">
           <Markdown
             components={{
-              h1: ({ node: _node, ...props }) => <h3 className="border-b border-black/20 pb-4 pt-7 text-2xl font-semibold tracking-[-.03em]" {...props} />,
-              h2: ({ node: _node, ...props }) => <h3 className="border-b border-black/20 pb-4 pt-7 text-2xl font-semibold tracking-[-.03em]" {...props} />,
-              h3: ({ node: _node, ...props }) => <h3 className="border-b border-black/20 pb-4 pt-7 text-xl font-semibold tracking-[-.025em]" {...props} />,
-              p: ({ node: _node, ...props }) => <p className="py-3 text-base leading-[1.75] text-black/72" {...props} />,
-              ul: ({ node: _node, ...props }) => <ul className="my-3 list-disc space-y-2 pl-6 text-base leading-[1.7] text-black/72 marker:text-[#4d6b31]" {...props} />,
-              ol: ({ node: _node, ...props }) => <ol className="my-3 list-decimal space-y-2 pl-6 text-base leading-[1.7] text-black/72 marker:font-semibold marker:text-[#4d6b31]" {...props} />,
-              strong: ({ node: _node, ...props }) => <strong className="font-semibold text-black" {...props} />,
+              h1: ({ node: _node, ...props }) => (
+                <h3
+                  className="border-b border-black/20 pb-4 pt-7 text-2xl font-semibold tracking-[-.03em]"
+                  {...props}
+                />
+              ),
+              h2: ({ node: _node, ...props }) => (
+                <h3
+                  className="border-b border-black/20 pb-4 pt-7 text-2xl font-semibold tracking-[-.03em]"
+                  {...props}
+                />
+              ),
+              h3: ({ node: _node, ...props }) => (
+                <h3
+                  className="border-b border-black/20 pb-4 pt-7 text-xl font-semibold tracking-[-.025em]"
+                  {...props}
+                />
+              ),
+              p: ({ node: _node, ...props }) => (
+                <p
+                  className="py-3 text-base leading-[1.75] text-black/72"
+                  {...props}
+                />
+              ),
+              ul: ({ node: _node, ...props }) => (
+                <ul
+                  className="my-3 list-disc space-y-2 pl-6 text-base leading-[1.7] text-black/72 marker:text-[#4d6b31]"
+                  {...props}
+                />
+              ),
+              ol: ({ node: _node, ...props }) => (
+                <ol
+                  className="my-3 list-decimal space-y-2 pl-6 text-base leading-[1.7] text-black/72 marker:font-semibold marker:text-[#4d6b31]"
+                  {...props}
+                />
+              ),
+              strong: ({ node: _node, ...props }) => (
+                <strong className="font-semibold text-black" {...props} />
+              ),
             }}
           >
             {brief.body}
@@ -244,24 +316,38 @@ function DecisionBrief({
         <div className="lg:col-start-2">
           <p className="eyebrow text-[#4d6b31]">Citation index</p>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60">
-            Every citation marker in the brief resolves to a structured claim and its original public source.
+            Every citation marker in the brief resolves to a structured claim
+            and its original public source.
           </p>
           <ol className="mt-6 border-t border-black/20">
             {claims.map((claim, index) => {
               const sourceLinks = edges
                 .filter((edge) => edge.target === claim.id)
                 .map((edge) => sources.get(edge.source))
-                .filter((source): source is EvidenceNode => source !== undefined);
+                .filter(
+                  (source): source is EvidenceNode => source !== undefined,
+                );
               return (
-                <li key={claim.id} className="grid gap-3 border-b border-black/20 py-5 md:grid-cols-[92px_1fr]">
+                <li
+                  key={claim.id}
+                  className="grid gap-3 border-b border-black/20 py-5 md:grid-cols-[92px_1fr]"
+                >
                   <span className="font-mono text-xs font-semibold text-[#4d6b31]">
                     Claim {String(index + 1).padStart(2, "0")}
                   </span>
                   <div>
-                    <p className="text-sm font-semibold leading-relaxed">{claim.label}</p>
+                    <p className="text-sm font-semibold leading-relaxed">
+                      {claim.label}
+                    </p>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
                       {sourceLinks.map((source) => (
-                        <a key={source.id} href={source.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-[#4d6b31] underline-offset-4 hover:underline">
+                        <a
+                          key={source.id}
+                          href={source.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-[#4d6b31] underline-offset-4 hover:underline"
+                        >
                           {source.label} <ExternalLink className="size-3" />
                         </a>
                       ))}
@@ -294,11 +380,13 @@ function ProcessProof({ process }: { process: PublicProcess }) {
     {
       name: "AgentMail",
       value:
+        process.deliveryCount > 0
+          ? `${process.deliveryCount} brief ${process.deliveryCount === 1 ? "delivery" : "deliveries"}`
+          : "Ready for team review",
+      secondaryValue:
         process.verifiedReplyCount > 0
           ? `${process.verifiedReplyCount} verified ${process.verifiedReplyCount === 1 ? "reply" : "replies"}`
-          : process.deliveryCount > 0
-            ? `${process.deliveryCount} brief ${process.deliveryCount === 1 ? "delivery" : "deliveries"}`
-            : "Ready for team review",
+          : undefined,
       detail:
         process.verifiedReplyCount > 0
           ? "Delivered the brief and returned signed replies for human review."
@@ -315,33 +403,59 @@ function ProcessProof({ process }: { process: PublicProcess }) {
         <div className="grid gap-8 lg:grid-cols-[.7fr_1.3fr]">
           <div>
             <p className="eyebrow text-[#c7ff4a]">Verified process</p>
-            <h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.055em] md:text-7xl">The recommendation has receipts.</h2>
+            <h2 className="mt-5 text-5xl font-semibold leading-[.9] tracking-[-.055em] md:text-7xl">
+              The recommendation has receipts.
+            </h2>
             <p className="mt-6 max-w-md text-sm leading-relaxed text-white/58">
-              Convex keeps collection, synthesis, delivery, and review synchronized in realtime while the public projection reveals no private team data.
+              Convex keeps collection, synthesis, delivery, and review
+              synchronized in realtime while the public projection reveals no
+              private team data.
             </p>
           </div>
           <div>
             <div className="grid border-l border-t border-white/20 md:grid-cols-3">
               {sponsors.map((sponsor) => (
-                <article key={sponsor.name} className="min-h-52 border-b border-r border-white/20 p-5">
+                <article
+                  key={sponsor.name}
+                  className="min-h-52 border-b border-r border-white/20 p-5"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold">{sponsor.name}</p>
                     {sponsor.verified ? (
                       <CheckCircle2 className="size-4 text-[#c7ff4a]" />
                     ) : (
-                      <span className="size-2 rounded-full border border-white/40" aria-label="Pending" />
+                      <span
+                        className="size-2 rounded-full border border-white/40"
+                        aria-label="Pending"
+                      />
                     )}
                   </div>
-                  <p className="mt-12 text-2xl font-semibold tracking-[-.035em]">{sponsor.value}</p>
-                  <p className="mt-3 text-xs leading-relaxed text-white/55">{sponsor.detail}</p>
+                  <p className="mt-12 text-2xl font-semibold tracking-[-.035em]">
+                    {sponsor.value}
+                  </p>
+                  {sponsor.secondaryValue && (
+                    <p className="mt-1 text-lg font-semibold tracking-[-.025em] text-[#c7ff4a]">
+                      {sponsor.secondaryValue}
+                    </p>
+                  )}
+                  <p className="mt-3 text-xs leading-relaxed text-white/55">
+                    {sponsor.detail}
+                  </p>
                 </article>
               ))}
             </div>
             <ol className="mt-10 border-t border-white/20">
               {process.events.map((event, index) => (
-                <li key={`${event.type}-${event.label}-${index}`} className="grid grid-cols-[48px_88px_1fr] gap-4 border-b border-white/20 py-4 text-sm">
-                  <span className="font-mono text-xs text-[#c7ff4a]">{String(index + 1).padStart(2, "0")}</span>
-                  <span className="text-xs uppercase tracking-[.12em] text-white/50">{event.type}</span>
+                <li
+                  key={`${event.type}-${event.label}-${index}`}
+                  className="grid grid-cols-[48px_88px_1fr] gap-4 border-b border-white/20 py-4 text-sm"
+                >
+                  <span className="font-mono text-xs text-[#c7ff4a]">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="text-xs uppercase tracking-[.12em] text-white/50">
+                    {event.type}
+                  </span>
                   <span>{event.label}</span>
                 </li>
               ))}
@@ -367,8 +481,13 @@ function UnavailableGarden() {
     <div className="grid min-h-screen place-items-center bg-[#f2eee5] p-6">
       <div className="text-center">
         <p className="eyebrow">Decision unavailable</p>
-        <h1 className="mt-4 font-editorial text-5xl">This research brief is private or revoked.</h1>
-        <Link to="/" className="mt-8 inline-flex items-center gap-2 text-sm underline">
+        <h1 className="mt-4 font-editorial text-5xl">
+          This research brief is private or revoked.
+        </h1>
+        <Link
+          to="/"
+          className="mt-8 inline-flex items-center gap-2 text-sm underline"
+        >
           <ArrowLeft className="size-4" /> Return home
         </Link>
       </div>

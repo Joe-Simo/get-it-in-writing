@@ -8,6 +8,7 @@ const teamSummary = v.object({
   name: v.string(),
   slug: v.string(),
   role: v.union(v.literal("owner"), v.literal("member")),
+  reviewEmail: v.optional(v.string()),
 });
 
 export const listMine = query({
@@ -34,9 +35,29 @@ export const listMine = query({
               name: team.name,
               slug: team.slug,
               role: membership.role,
+              ...(team.reviewEmail === undefined
+                ? {}
+                : { reviewEmail: team.reviewEmail }),
             },
           ],
     );
+  },
+});
+
+export const setReviewEmail = mutation({
+  args: { teamId: v.id("teams"), email: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const membership = await requireTeamMember(ctx, args.teamId);
+    if (membership.role !== "owner") {
+      throw new Error("Only team owners can change the review route");
+    }
+    const email = args.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Enter a valid review email address");
+    }
+    await ctx.db.patch("teams", args.teamId, { reviewEmail: email });
+    return null;
   },
 });
 

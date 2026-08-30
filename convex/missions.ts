@@ -133,6 +133,7 @@ const workspaceResult = v.object({
       revokedAt: v.optional(v.number()),
     }),
   ),
+  reviewEmail: v.union(v.null(), v.string()),
 });
 
 function parseSeedUrl(value: string) {
@@ -256,6 +257,7 @@ export const getWorkspace = query({
       notes,
       replies,
       garden,
+      team,
     ] = await Promise.all([
       ctx.db
         .query("missionSeeds")
@@ -297,6 +299,7 @@ export const getWorkspace = query({
         .query("publicGardens")
         .withIndex("by_missionId", (q) => q.eq("missionId", args.missionId))
         .unique(),
+      ctx.db.get("teams", mission.teamId),
     ]);
     return {
       mission: {
@@ -373,6 +376,7 @@ export const getWorkspace = query({
                 ? {}
                 : { revokedAt: garden.revokedAt }),
             },
+      reviewEmail: team?.reviewEmail ?? null,
     };
   },
 });

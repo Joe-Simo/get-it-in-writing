@@ -9,6 +9,7 @@ import {
   CircleAlert,
   LoaderCircle,
   LogOut,
+  MailCheck,
   Plus,
   Radar,
   Send,
@@ -74,7 +75,8 @@ export default function DashboardPage() {
               Name your decision team.
             </CardTitle>
             <CardDescription>
-              This creates a private boundary for decisions, sources, and briefs.
+              This creates a private boundary for decisions, sources, and
+              briefs.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -190,6 +192,7 @@ type TeamSummary = {
   name: string;
   slug: string;
   role: "owner" | "member";
+  reviewEmail?: string;
 };
 
 function TeamDashboard({
@@ -231,6 +234,9 @@ function TeamDashboard({
         </Select>
         <div className="flex items-center gap-1">
           <CreateTeamDialog onCreated={onTeamChange} />
+          {team.role === "owner" && (
+            <TeamReviewRouteDialog key={team._id} team={team} />
+          )}
           {team.role === "owner" && <TeamInviteDialog teamId={team._id} />}
           <Button
             variant="ghost"
@@ -294,6 +300,89 @@ function TeamDashboard({
         </div>
       </main>
     </div>
+  );
+}
+
+function TeamReviewRouteDialog({ team }: { team: TeamSummary }) {
+  const setReviewEmail = useMutation(api.teams.setReviewEmail);
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState(team.reviewEmail ?? "");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" aria-label="Review route">
+          <MailCheck /> <span className="hidden lg:inline">Review route</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="bg-[#f2eee5]">
+        <DialogHeader>
+          <DialogTitle className="font-editorial text-4xl font-normal tracking-[-.04em]">
+            Route briefs to a real reviewer.
+          </DialogTitle>
+          <DialogDescription>
+            AgentMail sends research briefs only to this owner-approved address
+            or a signed-in team member. Replies return as verified review items.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            setPending(true);
+            setSaved(false);
+            setError("");
+            void setReviewEmail({ teamId: team._id, email })
+              .then(() => setSaved(true))
+              .catch((reason: unknown) =>
+                setError(
+                  reason instanceof Error
+                    ? reason.message
+                    : "Review route could not be saved",
+                ),
+              )
+              .finally(() => setPending(false));
+          }}
+        >
+          <Label htmlFor="review-route-email">Review email</Label>
+          <Input
+            id="review-route-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="mt-2 h-12"
+            required
+          />
+          {error && (
+            <p role="alert" className="mt-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+          {saved && (
+            <p
+              role="status"
+              className="mt-3 flex items-center gap-2 text-sm text-green-800"
+            >
+              <CheckCircle2 className="size-4" /> Review route secured.
+            </p>
+          )}
+          <Button
+            type="submit"
+            disabled={pending}
+            className="mt-5 w-full rounded-full"
+          >
+            {pending ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <MailCheck />
+            )}
+            Save review route
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -661,4 +750,3 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
     </Dialog>
   );
 }
-

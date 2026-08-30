@@ -15,6 +15,8 @@ export const getSendContext = internalQuery({
   handler: async (ctx, args) => {
     const brief = await ctx.db.get("briefs", args.briefId);
     if (brief === null) throw new Error("Brief not found");
+    const team = await ctx.db.get("teams", brief.teamId);
+    if (team === null) throw new Error("Team not found");
     const requester = await ctx.db
       .query("memberships")
       .withIndex("by_userId_and_teamId", (q) =>
@@ -26,10 +28,18 @@ export const getSendContext = internalQuery({
       .query("memberships")
       .withIndex("by_teamId", (q) => q.eq("teamId", brief.teamId))
       .take(20);
-    const users = await Promise.all(memberships.map((membership) => ctx.db.get("users", membership.userId)));
+    const users = await Promise.all(
+      memberships.map((membership) => ctx.db.get("users", membership.userId)),
+    );
     const recipient = args.recipientEmail.toLowerCase();
-    if (!users.some((user) => user?.email?.toLowerCase() === recipient)) {
-      throw new Error("Briefs can only be sent to current team members");
+    const isMember = users.some(
+      (user) => user?.email?.toLowerCase() === recipient,
+    );
+    const isReviewRoute = team.reviewEmail?.toLowerCase() === recipient;
+    if (!isMember && !isReviewRoute) {
+      throw new Error(
+        "Briefs can only be sent to current members or the approved review address",
+      );
     }
     return { title: brief.title, summary: brief.summary, body: brief.body };
   },

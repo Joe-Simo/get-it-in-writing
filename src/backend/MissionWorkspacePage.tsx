@@ -327,7 +327,10 @@ export default function MissionWorkspacePage() {
                   <p className="mt-2 text-sm text-white/55">
                     {data.brief.summary}
                   </p>
-                  <BriefDeliveryDialog briefId={data.brief._id} />
+                  <BriefDeliveryDialog
+                    briefId={data.brief._id}
+                    reviewEmail={data.reviewEmail}
+                  />
                 </div>
               )}
             </div>
@@ -757,10 +760,16 @@ function ReplyReview({
   );
 }
 
-function BriefDeliveryDialog({ briefId }: { briefId: Id<"briefs"> }) {
+function BriefDeliveryDialog({
+  briefId,
+  reviewEmail,
+}: {
+  briefId: Id<"briefs">;
+  reviewEmail: string | null;
+}) {
   const sendBrief = useAction(api.emailActions.sendBrief);
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(reviewEmail ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
@@ -780,8 +789,9 @@ function BriefDeliveryDialog({ briefId }: { briefId: Id<"briefs"> }) {
             Deliver the sourced brief.
           </DialogTitle>
           <DialogDescription>
-            For privacy, delivery is limited to current team members. Replies
-            return as verified review items.
+            For privacy, delivery is limited to current team members or the
+            owner-approved review route. Replies return as verified review
+            items.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -805,7 +815,7 @@ function BriefDeliveryDialog({ briefId }: { briefId: Id<"briefs"> }) {
               .finally(() => setPending(false));
           }}
         >
-          <Label htmlFor="brief-email">Team member email</Label>
+          <Label htmlFor="brief-email">Approved review email</Label>
           <Input
             id="brief-email"
             type="email"
@@ -841,4 +851,3 @@ function BriefDeliveryDialog({ briefId }: { briefId: Id<"briefs"> }) {
     </Dialog>
   );
 }
-
