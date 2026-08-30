@@ -2,17 +2,17 @@
 
 - **Project:** Get It in Writing
 - **Event:** Convex All Gas Hackathon
-- **What it does:** Checks what an official page actually promises, identifies the consequential gap, gets that exact point confirmed in writing with the user's approval, and preserves the evidence as a private Proof Card.
+- **What it does:** Checks every requirement behind an everyday decision against official sources, gets only consequential gaps confirmed in writing with the user's approval, and preserves scoped evidence and conditions in a private Proof Card.
 - **Live app:** https://resilient-salamander-937.convex.site
 - **Repo:** https://github.com/Joe-Simo/signal-garden-all-gas
 - **Frontend:** Convex static hosting
 - **Convex deployment:** https://resilient-salamander-937.convex.cloud
 - **Components:** @agentmail/convex, @firecrawl/firecrawl-convex, @convex-dev/static-hosting
-- **Convex features:** schema, tables, indexes, realtime queries, mutations, actions, HTTP actions, scheduled functions
+- **Convex features:** schema, tables, indexes, realtime queries, mutations, actions, HTTP actions, scheduled functions, crons
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T19:54:17Z
+- **Last updated:** 2026-08-30T20:35:45Z
 
 ## Log
 
@@ -129,3 +129,29 @@ private confirmation draft, found no official contact, and sent nothing.
 Verified strict lint and type checking, 12 focused tests, 14 browser journeys,
 the production build, shader validation, desktop/mobile layout, accessibility,
 and the no-WebGPU fallback.
+
+### 2026-08-30 - 123f451
+
+Completed the full multi-requirement lifecycle. OpenAI now scopes a decision
+before research; Firecrawl stores official pages progressively; and the
+Reliance Map keeps established, conditional, conflicting, scope-mismatched, and
+not-established outcomes distinct. Proof Cards preserve per-requirement reply
+outcomes, source excerpts, conditions, and later source changes instead of
+flattening them into a summary (`convex/decisions.ts`, `convex/research.ts`,
+`convex/researchOpenAI.ts`, `convex/confirmationOpenAI.ts`,
+`convex/changes.ts`).
+
+Finished the real communication boundary: exact-recipient and exact-message
+approval remains mandatory, replies are sender- and thread-matched, duplicate
+events are ignored, one approved follow-up is allowed, and a Convex cron checks
+the single configured AgentMail inbox every minute when webhook administration
+is unavailable (`convex/confirmations.ts`, `convex/crons.ts`, `convex/http.ts`).
+Added explicit high-stakes exclusions and requirement-level security tests.
+
+Deployed only `joe-simo/signal-garden-all-gas` to its dedicated production
+deployment and refreshed Convex Static Hosting. Live readiness checks confirmed
+Firecrawl, OpenAI, AgentMail, and AgentMail reply ingestion; the authenticated
+webhook route rejects unsigned requests. Verified strict lint and type checking,
+20 focused tests, the production build, 14 desktop/mobile browser journeys,
+reduced motion, forced colors, mobile overflow, the final production asset, and
+zero console errors on the live landing page.
