@@ -65,6 +65,43 @@ export function normalizeContext(value: string | undefined) {
   return text || undefined;
 }
 
+const highStakesPatterns: Array<{ pattern: RegExp; label: string }> = [
+  {
+    pattern: /\b(diagnos(?:is|e)|medical treatment|treatment will cure|cure me|medication|surgery|clinical outcome|doctor says)\b/i,
+    label: "medical treatment",
+  },
+  {
+    pattern: /\b(legal rights?|lawsuit|attorney advice|immigration status|child custody|contract enforceability)\b/i,
+    label: "legal rights",
+  },
+  {
+    pattern: /\b(insurance (?:coverage|claim|benefit)|claim (?:approval|denial)|policy will cover)\b/i,
+    label: "insurance coverage",
+  },
+  {
+    pattern: /\b(investment(?: return|.{0,80}\b(?:return|guarantee))|loan approval|credit decision|mortgage approval|financial product)\b/i,
+    label: "financial decisions",
+  },
+  {
+    pattern: /\b(job offer|employment guarantee|guaranteed employment|will hire me|get the job)\b/i,
+    label: "employment guarantees",
+  },
+  {
+    pattern: /\b(structurally safe|safety guarantee|safe to ingest|allergen[- ]free|life[- ]safety)\b/i,
+    label: "safety-critical claims",
+  },
+];
+
+export function assertSupportedDecision(requirement: string, context?: string) {
+  const combined = `${requirement}\n${context ?? ""}`;
+  const match = highStakesPatterns.find(({ pattern }) => pattern.test(combined));
+  if (match) {
+    throw new Error(
+      `Get It in Writing does not handle ${match.label}. Use it for ordinary purchases, bookings, rentals, venues, products, contractors, or consumer services.`,
+    );
+  }
+}
+
 export function normalizeEmail(value: string) {
   const email = value.trim().toLowerCase();
   if (

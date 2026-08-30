@@ -11,13 +11,18 @@ you get only the consequential gap confirmed in writing.
 
 ## The product
 
-1. Start a private case with an official page and one exact requirement.
-2. Review a source-backed Reliance Map: established, vague or conditional, and
-   not established.
-3. If a material gap remains, review the official recipient and exact message.
+1. Start a private case with an official page and every requirement that would
+   change the decision.
+2. Review a source-backed Reliance Map. Each scoped requirement is classified
+   as established, conditional, conflicting, a scope mismatch, or not
+   established.
+3. If a material gap remains, review the verified official recipient and one
+   exact message that asks only about the unresolved requirements.
 4. Explicitly approve the request before it is sent.
-5. When a real reply arrives, keep its answer, conditions, sources, and scope in
-   a private Proof Card.
+5. When a real reply arrives, keep each answer, its exact conditions, the
+   original source evidence, and its scope in a private Proof Card.
+6. Keep the card honest when an official source changes: the previous and new
+   passages remain visible until the owner acknowledges the change.
 
 The first release is intended for ordinary bookings, rentals, purchases, and
 services. It is not for medical, legal, financial, insurance, employment, or
@@ -31,8 +36,11 @@ the owner’s approval.
 - Firecrawl performs bounded research on the submitted official domain.
 - OpenAI produces structured assessments that are checked against the captured
   source text before supportive claims are stored.
-- AgentMail sends the owner-approved message and correlates real delivery and
-  reply events.
+- AgentMail sends the owner-approved message. Convex correlates real replies by
+  provider thread and a unique request token, deduplicates them, and interprets
+  them requirement by requirement. The production deployment checks the single
+  configured inbox every minute; the authenticated webhook route can be enabled
+  when the AgentMail key has webhook-administration permission.
 - Convex Static Hosting serves the production frontend at `convex.site`.
 
 All provider credentials stay in server-side Convex environment variables.
@@ -59,8 +67,10 @@ SITE_URL
 PUBLIC_APP_URL
 ```
 
-`AGENTMAIL_WEBHOOK_SECRET` is required when the deployed webhook is configured
-to verify AgentMail signatures.
+`AGENTMAIL_WEBHOOK_SECRET` is optional. When an AgentMail webhook is registered,
+its write-only custom `Authorization` header must use this value. The application
+does not require webhook administration to receive replies because its Convex
+cron performs retry-safe, idempotent inbox ingestion.
 
 ## Verification
 

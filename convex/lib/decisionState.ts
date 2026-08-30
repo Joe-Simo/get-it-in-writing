@@ -34,8 +34,33 @@ export const decisionCategory = v.union(
 
 export const assessmentStatus = v.union(
   v.literal("established"),
+  v.literal("conditional"),
+  v.literal("conflicting"),
+  v.literal("scope_mismatch"),
+  // Kept for rows produced by the first Get It in Writing deployment.
   v.literal("vague_or_conditional"),
   v.literal("not_established"),
+);
+
+export const requirementImportance = v.union(
+  v.literal("critical"),
+  v.literal("important"),
+  v.literal("preference"),
+);
+
+export const ambiguityKind = v.union(
+  v.literal("missing"),
+  v.literal("conditional"),
+  v.literal("conflicting"),
+  v.literal("scope_mismatch"),
+  v.literal("non_guarantee"),
+);
+
+export const evidenceStrength = v.union(
+  v.literal("direct"),
+  v.literal("qualified"),
+  v.literal("conflicting"),
+  v.literal("insufficient"),
 );
 
 export const proofVerdict = v.union(
@@ -48,6 +73,7 @@ export const proofVerdict = v.union(
 );
 
 export const operationalFailure = v.union(
+  v.literal("unsupported_decision"),
   v.literal("research_failed"),
   v.literal("analysis_failed"),
   v.literal("delivery_failed"),

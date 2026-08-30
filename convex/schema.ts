@@ -2,12 +2,15 @@ import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+  ambiguityKind,
   assessmentStatus,
   decisionCategory,
   decisionStatus,
+  evidenceStrength,
   operationalFailure,
   outboundStatus,
   proofVerdict,
+  requirementImportance,
 } from "./lib/decisionState";
 
 export default defineSchema({
@@ -50,8 +53,9 @@ export default defineSchema({
     .index("by_teamId_and_email", ["teamId", "email"])
     .index("by_teamId_and_email_and_status", ["teamId", "email", "status"]),
   webhookReceipts: defineTable({
-    // Firecrawl is accepted only for historical receipts. Current webhooks are
-    // AgentMail confirmation events; Firecrawl checks complete synchronously.
+    // Firecrawl is accepted only for historical receipts. Current Firecrawl
+    // crawl callbacks are handled by its isolated component routes; app-level
+    // webhook receipts here are reserved for AgentMail and legacy rows.
     provider: v.union(v.literal("firecrawl"), v.literal("agentmail")),
     deliveryId: v.string(),
     status: v.union(v.literal("accepted"), v.literal("rejected")),
@@ -64,6 +68,7 @@ export default defineSchema({
     sourceHost: v.string(),
     requirementText: v.string(),
     context: v.optional(v.string()),
+    entityId: v.optional(v.id("decisionEntities")),
     category: decisionCategory,
     status: decisionStatus,
     operationalFailure: v.optional(operationalFailure),
@@ -71,6 +76,7 @@ export default defineSchema({
     crawlId: v.optional(v.string()),
     researchStartedAt: v.optional(v.number()),
     analyzedAt: v.optional(v.number()),
+    sourceChangedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -81,10 +87,26 @@ export default defineSchema({
       "updatedAt",
     ])
     .index("by_crawlId", ["crawlId"]),
+  decisionEntities: defineTable({
+    ownerId: v.id("users"),
+    canonicalUrl: v.string(),
+    displayName: v.string(),
+    type: decisionCategory,
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_ownerId_and_canonicalUrl", ["ownerId", "canonicalUrl"])
+    .index("by_ownerId_and_updatedAt", ["ownerId", "updatedAt"]),
   decisionRequirements: defineTable({
     decisionId: v.id("decisions"),
     ownerId: v.id("users"),
     text: v.string(),
+    normalizedMeaning: v.optional(v.string()),
+    importance: v.optional(requirementImportance),
+    scope: v.optional(v.string()),
+    dates: v.optional(v.array(v.string())),
+    quantities: v.optional(v.array(v.string())),
+    hardConstraint: v.optional(v.boolean()),
     order: v.number(),
     createdAt: v.number(),
   }).index("by_decisionId_and_order", ["decisionId", "order"]),
@@ -98,6 +120,8 @@ export default defineSchema({
     capturedAt: v.number(),
   })
     .index("by_decisionId_and_url", ["decisionId", "url"])
+    .index("by_decisionId_and_url_and_capturedAt", ["decisionId", "url", "capturedAt"])
+    .index("by_decisionId_and_contentHash", ["decisionId", "contentHash"])
     .index("by_crawlId_and_url", ["crawlId", "url"]),
   claimAssessments: defineTable({
     decisionId: v.id("decisions"),
@@ -105,6 +129,8 @@ export default defineSchema({
     status: assessmentStatus,
     statement: v.string(),
     reason: v.string(),
+    languageStrength: v.optional(evidenceStrength),
+    assessedScope: v.optional(v.string()),
     sourceUrl: v.optional(v.string()),
     sourceTitle: v.optional(v.string()),
     sourceExcerpt: v.optional(v.string()),
@@ -112,6 +138,26 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_decisionId_and_order", ["decisionId", "order"])
+    .index("by_requirementId", ["requirementId"]),
+  claimEvidence: defineTable({
+    decisionId: v.id("decisions"),
+    assessmentId: v.id("claimAssessments"),
+    sourceUrl: v.string(),
+    sourceTitle: v.optional(v.string()),
+    sourceExcerpt: v.string(),
+    supports: v.boolean(),
+    observedAt: v.number(),
+  })
+    .index("by_decisionId_and_observedAt", ["decisionId", "observedAt"])
+    .index("by_assessmentId", ["assessmentId"]),
+  decisionAmbiguities: defineTable({
+    decisionId: v.id("decisions"),
+    requirementId: v.id("decisionRequirements"),
+    kind: ambiguityKind,
+    explanation: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_decisionId_and_createdAt", ["decisionId", "createdAt"])
     .index("by_requirementId", ["requirementId"]),
   officialContacts: defineTable({
     decisionId: v.id("decisions"),
@@ -159,11 +205,26 @@ export default defineSchema({
     sender: v.string(),
     subject: v.string(),
     body: v.string(),
+    analysisBody: v.optional(v.string()),
     receivedAt: v.number(),
     createdAt: v.number(),
   })
     .index("by_requestId_and_receivedAt", ["requestId", "receivedAt"])
     .index("by_messageId", ["messageId"]),
+  confirmationOutcomes: defineTable({
+    decisionId: v.id("decisions"),
+    requestId: v.id("confirmationRequests"),
+    replyId: v.id("confirmationReplies"),
+    requirementId: v.id("decisionRequirements"),
+    verdict: proofVerdict,
+    summary: v.string(),
+    conditions: v.array(v.string()),
+    supportingQuote: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_decisionId_and_createdAt", ["decisionId", "createdAt"])
+    .index("by_replyId", ["replyId"])
+    .index("by_requirementId", ["requirementId"]),
   proofCards: defineTable({
     decisionId: v.id("decisions"),
     ownerId: v.id("users"),
@@ -183,6 +244,47 @@ export default defineSchema({
   })
     .index("by_ownerId_and_createdAt", ["ownerId", "createdAt"])
     .index("by_decisionId", ["decisionId"]),
+  proofItems: defineTable({
+    proofCardId: v.id("proofCards"),
+    decisionId: v.id("decisions"),
+    requirementId: v.id("decisionRequirements"),
+    verdict: proofVerdict,
+    requirementText: v.string(),
+    summary: v.string(),
+    conditions: v.array(v.string()),
+    sourceUrls: v.array(v.string()),
+    sourceExcerpts: v.array(v.string()),
+    order: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_proofCardId_and_order", ["proofCardId", "order"])
+    .index("by_decisionId_and_order", ["decisionId", "order"]),
+  sourceChanges: defineTable({
+    decisionId: v.id("decisions"),
+    sourceUrl: v.string(),
+    previousHash: v.string(),
+    currentHash: v.string(),
+    previousExcerpt: v.string(),
+    currentExcerpt: v.string(),
+    status: v.union(v.literal("open"), v.literal("acknowledged")),
+    detectedAt: v.number(),
+    acknowledgedAt: v.optional(v.number()),
+  })
+    .index("by_decisionId_and_detectedAt", ["decisionId", "detectedAt"])
+    .index("by_decisionId_and_status", ["decisionId", "status"]),
+  changeMonitors: defineTable({
+    decisionId: v.id("decisions"),
+    ownerId: v.id("users"),
+    active: v.boolean(),
+    intervalHours: v.number(),
+    nextCheckAt: v.number(),
+    lastCheckedAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_decisionId", ["decisionId"])
+    .index("by_active_and_nextCheckAt", ["active", "nextCheckAt"]),
   decisionEvents: defineTable({
     decisionId: v.id("decisions"),
     fromStatus: v.optional(decisionStatus),

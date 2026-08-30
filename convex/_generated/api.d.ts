@@ -9,13 +9,16 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as changes from "../changes.js";
 import type * as confirmationOpenAI from "../confirmationOpenAI.js";
 import type * as confirmations from "../confirmations.js";
+import type * as crons from "../crons.js";
 import type * as decisions from "../decisions.js";
 import type * as http from "../http.js";
 import type * as lib_decisionState from "../lib/decisionState.js";
 import type * as lib_validation from "../lib/validation.js";
 import type * as model_auth from "../model/auth.js";
+import type * as readiness from "../readiness.js";
 import type * as research from "../research.js";
 import type * as researchOpenAI from "../researchOpenAI.js";
 
@@ -27,13 +30,16 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  changes: typeof changes;
   confirmationOpenAI: typeof confirmationOpenAI;
   confirmations: typeof confirmations;
+  crons: typeof crons;
   decisions: typeof decisions;
   http: typeof http;
   "lib/decisionState": typeof lib_decisionState;
   "lib/validation": typeof lib_validation;
   "model/auth": typeof model_auth;
+  readiness: typeof readiness;
   research: typeof research;
   researchOpenAI: typeof researchOpenAI;
 }>;

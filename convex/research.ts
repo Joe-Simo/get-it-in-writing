@@ -2,9 +2,95 @@ import { FirecrawlClient } from "@firecrawl/firecrawl-convex";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
-import { internalAction, internalMutation } from "./_generated/server";
+import { internalAction, internalMutation, query } from "./_generated/server";
+import { requireUserId } from "./model/auth";
 
 const firecrawl = new FirecrawlClient(components.firecrawl);
+
+export const progress = query({
+  args: { decisionId: v.id("decisions") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      status: v.union(
+        v.literal("starting"),
+        v.literal("scraping"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("cancelled"),
+      ),
+      completed: v.number(),
+      total: v.optional(v.number()),
+      pageCount: v.number(),
+      finalized: v.boolean(),
+      pages: v.array(
+        v.object({
+          url: v.string(),
+          title: v.optional(v.string()),
+          scrapedAt: v.number(),
+          truncated: v.boolean(),
+        }),
+      ),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const ownerId = await requireUserId(ctx);
+    const decision = await ctx.db.get("decisions", args.decisionId);
+    if (decision === null || decision.ownerId !== ownerId) return null;
+    if (!decision.crawlId) {
+      return {
+        status: "starting" as const,
+        completed: 0,
+        pageCount: 0,
+        finalized: false,
+        pages: [],
+      };
+    }
+    const [crawl, pageResult] = await Promise.all([
+      firecrawl.getCrawl(ctx, decision.crawlId),
+      firecrawl.listPages(ctx, {
+        crawlId: decision.crawlId,
+        paginationOpts: {
+          cursor: null,
+          numItems: 25,
+          maximumRowsRead: 25,
+          maximumBytesRead: 2_000_000,
+        },
+      }),
+    ]);
+    if (crawl === null) {
+      return {
+        status: "starting" as const,
+        completed: 0,
+        pageCount: pageResult.page.length,
+        finalized: false,
+        pages: pageResult.page.map((page) => ({
+          url: page.url,
+          ...(typeof page.metadata?.title === "string"
+            ? { title: page.metadata.title.slice(0, 240) }
+            : {}),
+          scrapedAt: page.scrapedAt,
+          truncated: page.truncated,
+        })),
+      };
+    }
+    return {
+      status: crawl.status,
+      completed: crawl.completed ?? crawl.pageCount,
+      ...(crawl.total === undefined ? {} : { total: crawl.total }),
+      pageCount: crawl.pageCount,
+      finalized: crawl.finalized,
+      pages: pageResult.page.map((page) => ({
+        url: page.url,
+        ...(typeof page.metadata?.title === "string"
+          ? { title: page.metadata.title.slice(0, 240) }
+          : {}),
+        scrapedAt: page.scrapedAt,
+        truncated: page.truncated,
+      })),
+    };
+  },
+});
 
 export const start = internalAction({
   args: { decisionId: v.id("decisions") },

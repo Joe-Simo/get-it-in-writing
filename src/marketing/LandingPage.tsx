@@ -93,7 +93,7 @@ export default function LandingPage() {
               </div>
               <div>
                 <Label htmlFor="requirement">What must be true?</Label>
-                <p className="field-help">Say the exact thing that would change your decision.</p>
+                <p className="field-help">Tell us everything that would change your decision.</p>
                 <Textarea
                   id="requirement"
                   required
@@ -101,7 +101,7 @@ export default function LandingPage() {
                   maxLength={800}
                   value={requirementText}
                   onChange={(event) => setRequirementText(event.target.value)}
-                  placeholder="We need connecting rooms, not just adjacent rooms."
+                  placeholder="We need connecting rooms, free cancellation until 48 hours before arrival, and no resort fee."
                   rows={4}
                 />
                 <span className="character-count">{requirementText.length}/800</span>
@@ -124,7 +124,7 @@ export default function LandingPage() {
           </div>
           <div className="method-rail">
             <MethodStep number="01" icon={FileCheck2} title="Read the official source" copy="The page and relevant official policies are preserved with source links and capture details." />
-            <MethodStep number="02" icon={ShieldCheck} title="See the reliance map" copy="Your exact requirement is separated into established, vague or conditional, and not established." />
+            <MethodStep number="02" icon={ShieldCheck} title="See the reliance map" copy="Each need is checked separately for direct support, conditions, conflicts, scope mismatches, or missing language." />
             <MethodStep number="03" icon={MailQuestion} title="Ask only about the gap" copy="Review the exact recipient and message. You decide whether anything gets sent." />
             <MethodStep number="04" icon={Check} title="Keep the written answer" copy="The real reply and its conditions become a private, scoped Proof Card." />
           </div>
@@ -138,8 +138,10 @@ export default function LandingPage() {
           </div>
           <div className="reliance-sheet ticket-shell">
             <p className="reliance-requirement">“We need connecting rooms, not just adjacent rooms.”</p>
-            <RelianceRow tone="green" label="Established" detail="Direct language from an official source appears here—with its citation." />
-            <RelianceRow tone="amber" label="Vague or conditional" detail="Related wording with availability, discretion, or unclear terms is kept separate." />
+            <RelianceRow tone="green" label="Published by provider" detail="Direct language from an official source appears here—with its citation." />
+            <RelianceRow tone="amber" label="Conditional" detail="Availability, discretion, rate rules, or other conditions remain attached." />
+            <RelianceRow tone="red" label="Conflicting information" detail="Both official passages remain visible. The disagreement is never smoothed over." />
+            <RelianceRow tone="purple" label="Scope mismatch" detail="A promise for a different date, model, room, quantity, or location does not count." />
             <RelianceRow tone="gray" label="Not established" detail="No supporting promise is treated as no promise—not as a likely yes." />
             <p className="anatomy-note">Interface anatomy only. No claim is shown until a real source has been checked.</p>
           </div>
@@ -172,7 +174,7 @@ function MethodStep({ number, icon: Icon, title, copy }: { number: string; icon:
   );
 }
 
-function RelianceRow({ tone, label, detail }: { tone: "green" | "amber" | "gray"; label: string; detail: string }) {
+function RelianceRow({ tone, label, detail }: { tone: "green" | "amber" | "red" | "purple" | "gray"; label: string; detail: string }) {
   return (
     <div className={`reliance-row reliance-${tone}`}>
       <span className="reliance-dot" aria-hidden="true" />

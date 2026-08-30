@@ -5,7 +5,7 @@ import {
   vEvent,
   vOutboundStatus,
 } from "@agentmail/convex";
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -28,6 +28,8 @@ const agentmail: AgentMail = new AgentMail(components.agentmail, {
   onEvent: internal.confirmations.onAgentMailEvent,
 });
 
+type ProofVerdict = Infer<typeof proofVerdict>;
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
@@ -42,6 +44,40 @@ function stringField(record: Record<string, unknown>, key: string) {
 function addressEmail(value: string) {
   const bracketed = value.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1];
   return (bracketed ?? value).trim().toLowerCase();
+}
+
+function replyOnly(value: string) {
+  const boundaryPatterns = [
+    /\nOn .{0,300}wrote:\s*\n/i,
+    /\nFrom:\s*.{0,300}\nSent:\s*.{0,300}\n/i,
+    /\n-{2,}\s*Original Message\s*-{2,}\s*\n/i,
+  ];
+  let body = value.replace(/\r\n/g, "\n");
+  for (const pattern of boundaryPatterns) {
+    const boundary = body.search(pattern);
+    if (boundary >= 0) body = body.slice(0, boundary);
+  }
+  body = body
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith(">"))
+    .join("\n");
+  const signatureBoundary = body.search(/\n--\s*\n/);
+  if (signatureBoundary >= 0) body = body.slice(0, signatureBoundary);
+  return (body.trim() || value.trim()).slice(0, 20_000);
+}
+
+function overallVerdict(outcomes: Array<{ verdict: ProofVerdict }>): ProofVerdict {
+  const verdicts = outcomes.map((outcome) => outcome.verdict);
+  if (verdicts.length === 0 || verdicts.some((verdict) => verdict === "needs_followup")) {
+    return "needs_followup";
+  }
+  if (verdicts.every((verdict) => verdict === "confirmed")) return "confirmed";
+  if (verdicts.every((verdict) => verdict === "confirmed" || verdict === "confirmed_with_conditions")) {
+    return "confirmed_with_conditions";
+  }
+  if (verdicts.every((verdict) => verdict === "not_confirmed")) return "not_confirmed";
+  if (verdicts.every((verdict) => verdict === "declined")) return "declined";
+  return "partially_confirmed";
 }
 
 function eventPayload(event: AgentMailEvent) {
@@ -347,6 +383,37 @@ export const onAgentMailEvent = internalMutation({
   },
 });
 
+export const ingestAgentMailEvent = internalMutation({
+  args: { event: vEvent },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const prior = await ctx.db
+      .query("webhookReceipts")
+      .withIndex("by_provider_and_deliveryId", (q) =>
+        q.eq("provider", "agentmail").eq("deliveryId", args.event.event_id),
+      )
+      .first();
+    if (prior !== null) return null;
+    await ctx.db.insert("webhookReceipts", {
+      provider: "agentmail",
+      deliveryId: args.event.event_id,
+      status: "accepted",
+      receivedAt: Date.now(),
+    });
+    await ctx.scheduler.runAfter(0, internal.confirmations.onAgentMailEvent, {
+      event: args.event,
+    });
+    if (args.event.event_type === "message.received" && args.event.message) {
+      await ctx.scheduler.runAfter(0, internal.confirmations.onMessageReceived, {
+        message: args.event.message,
+        thread: args.event.thread ?? {},
+        eventId: args.event.event_id,
+      });
+    }
+    return null;
+  },
+});
+
 export const onMessageReceived = internalMutation({
   args: { message: v.any(), thread: v.any(), eventId: v.string() },
   returns: v.null(),
@@ -371,6 +438,7 @@ export const onMessageReceived = internalMutation({
       stringField(message, "preview") ??
       ""
     ).slice(0, 20_000);
+    const analysisBody = replyOnly(body);
     let request = await ctx.db
       .query("confirmationRequests")
       .withIndex("by_threadId", (q) => q.eq("threadId", threadId))
@@ -404,6 +472,7 @@ export const onMessageReceived = internalMutation({
       sender: sender.slice(0, 500),
       subject,
       body,
+      analysisBody,
       receivedAt: safeReceivedAt,
       createdAt: Date.now(),
     });
@@ -426,6 +495,130 @@ export const onMessageReceived = internalMutation({
   },
 });
 
+export const monitoredReplyTargets = internalQuery({
+  args: {},
+  returns: v.array(v.object({
+    threadId: v.optional(v.string()),
+    requestToken: v.string(),
+  })),
+  handler: async (ctx) => {
+    const groups = await Promise.all(
+      (["pending", "sent", "delivered"] as const).map((status) =>
+        ctx.db
+          .query("confirmationRequests")
+          .withIndex("by_status_and_createdAt", (q) => q.eq("status", status))
+          .order("desc")
+          .take(100),
+      ),
+    );
+    return groups.flat().map((request) => ({
+      ...(request.threadId ? { threadId: request.threadId } : {}),
+      requestToken: request.requestToken,
+    }));
+  },
+});
+
+export const knownAgentMailDeliveries = internalQuery({
+  args: { deliveryIds: v.array(v.string()) },
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    const known = await Promise.all(
+      args.deliveryIds.slice(0, 100).map(async (deliveryId) => {
+        const receipt = await ctx.db
+          .query("webhookReceipts")
+          .withIndex("by_provider_and_deliveryId", (q) =>
+            q.eq("provider", "agentmail").eq("deliveryId", deliveryId),
+          )
+          .first();
+        return receipt === null ? null : deliveryId;
+      }),
+    );
+    return known.filter((deliveryId): deliveryId is string => deliveryId !== null);
+  },
+});
+
+export const ingestPolledMessage = internalMutation({
+  args: { message: v.any(), eventId: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const prior = await ctx.db
+      .query("webhookReceipts")
+      .withIndex("by_provider_and_deliveryId", (q) =>
+        q.eq("provider", "agentmail").eq("deliveryId", args.eventId),
+      )
+      .first();
+    if (prior !== null) return false;
+    await ctx.db.insert("webhookReceipts", {
+      provider: "agentmail",
+      deliveryId: args.eventId,
+      status: "accepted",
+      receivedAt: Date.now(),
+    });
+    await ctx.scheduler.runAfter(0, internal.confirmations.onMessageReceived, {
+      message: args.message,
+      thread: {},
+      eventId: args.eventId,
+    });
+    return true;
+  },
+});
+
+export const pollInbox = internalAction({
+  args: {},
+  returns: v.object({
+    reachable: v.boolean(),
+    scanned: v.number(),
+    matched: v.number(),
+  }),
+  handler: async (ctx) => {
+    const apiKey = process.env.AGENTMAIL_API_KEY;
+    const inboxId = process.env.AGENTMAIL_INBOX_ID;
+    if (!apiKey || !inboxId) return { reachable: false, scanned: 0, matched: 0 };
+    const targets = await ctx.runQuery(internal.confirmations.monitoredReplyTargets, {});
+    if (targets.length === 0) return { reachable: true, scanned: 0, matched: 0 };
+    const threadIds = new Set(targets.flatMap((target) => target.threadId ? [target.threadId] : []));
+    const requestTokens = new Set(targets.map((target) => target.requestToken));
+    const baseUrl = (process.env.AGENTMAIL_BASE_URL ?? "https://api.agentmail.to/v0").replace(/\/$/, "");
+    const authorization = { Authorization: `Bearer ${apiKey}` };
+    const listResponse = await fetch(
+      `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/messages?limit=100`,
+      { headers: authorization },
+    );
+    if (!listResponse.ok) return { reachable: false, scanned: 0, matched: 0 };
+    const payload = asRecord(await listResponse.json());
+    const messages = Array.isArray(payload.messages) ? payload.messages.map(asRecord) : [];
+    const candidates = messages.flatMap((summary) => {
+      const threadId = stringField(summary, "thread_id");
+      const messageId = stringField(summary, "message_id");
+      const subject = stringField(summary, "subject") ?? "";
+      const token = subject.match(/GIW-[A-Z0-9]{10}/i)?.[0]?.toUpperCase();
+      if (!messageId || !(
+        (threadId !== undefined && threadIds.has(threadId)) ||
+        (token !== undefined && requestTokens.has(token))
+      )) return [];
+      return [{ messageId, eventId: `poll:${messageId}` }];
+    });
+    const known = new Set(await ctx.runQuery(internal.confirmations.knownAgentMailDeliveries, {
+      deliveryIds: candidates.map((candidate) => candidate.eventId),
+    }));
+    let matched = 0;
+    for (const candidate of candidates) {
+      if (known.has(candidate.eventId)) continue;
+      const detailResponse = await fetch(
+        `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/messages/${encodeURIComponent(candidate.messageId)}`,
+        { headers: authorization },
+      );
+      if (!detailResponse.ok) continue;
+      const accepted = await ctx.runMutation(internal.confirmations.ingestPolledMessage, {
+        message: await detailResponse.json(),
+        eventId: candidate.eventId,
+      });
+      if (accepted) matched += 1;
+    }
+    return { reachable: true, scanned: messages.length, matched };
+  },
+});
+
 export const getReplyContext = internalQuery({
   args: { replyId: v.id("confirmationReplies") },
   returns: v.union(
@@ -435,6 +628,7 @@ export const getReplyContext = internalQuery({
       request: schema.doc("confirmationRequests"),
       reply: schema.doc("confirmationReplies"),
       assessments: v.array(schema.doc("claimAssessments")),
+      requirements: v.array(schema.doc("decisionRequirements")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -443,11 +637,17 @@ export const getReplyContext = internalQuery({
     const request = await ctx.db.get("confirmationRequests", reply.requestId);
     const decision = await ctx.db.get("decisions", reply.decisionId);
     if (request === null || decision === null) return null;
-    const assessments = await ctx.db
-      .query("claimAssessments")
-      .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decision._id))
-      .take(50);
-    return { decision, request, reply, assessments };
+    const [assessments, requirements] = await Promise.all([
+      ctx.db
+        .query("claimAssessments")
+        .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decision._id))
+        .take(50),
+      ctx.db
+        .query("decisionRequirements")
+        .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decision._id))
+        .take(20),
+    ]);
+    return { decision, request, reply, assessments, requirements };
   },
 });
 
@@ -472,10 +672,16 @@ export const markInterpretingReply = internalMutation({
 export const storeReplyInterpretation = internalMutation({
   args: {
     replyId: v.id("confirmationReplies"),
-    verdict: proofVerdict,
+    outcomes: v.array(
+      v.object({
+        requirementId: v.id("decisionRequirements"),
+        verdict: proofVerdict,
+        summary: v.string(),
+        conditions: v.array(v.string()),
+        supportingQuote: v.optional(v.string()),
+      }),
+    ),
     summary: v.string(),
-    conditions: v.array(v.string()),
-    supportingQuote: v.optional(v.string()),
     suggestedFollowUp: v.optional(v.string()),
   },
   returns: v.null(),
@@ -485,28 +691,74 @@ export const storeReplyInterpretation = internalMutation({
     const request = await ctx.db.get("confirmationRequests", reply.requestId);
     const decision = await ctx.db.get("decisions", reply.decisionId);
     if (request === null || decision === null) return null;
-    const assessments = await ctx.db
-      .query("claimAssessments")
-      .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decision._id))
-      .take(50);
-    const sourceUrls = [...new Set([decision.sourceUrl, ...assessments.flatMap((item) => (item.sourceUrl ? [item.sourceUrl] : []))])].slice(0, 8);
+    const [assessments, requirements] = await Promise.all([
+      ctx.db
+        .query("claimAssessments")
+        .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decision._id))
+        .take(50),
+      ctx.db
+        .query("decisionRequirements")
+        .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decision._id))
+        .take(20),
+    ]);
+    const requirementIds = new Set(requirements.map((requirement) => requirement._id));
+    const uniqueOutcomes = new Map(
+      args.outcomes
+        .filter((outcome) => requirementIds.has(outcome.requirementId))
+        .map((outcome) => [outcome.requirementId, outcome]),
+    );
+    if (uniqueOutcomes.size !== requirements.length) {
+      throw new Error("Every scoped requirement must receive one reply outcome");
+    }
+    const orderedOutcomes = requirements.map((requirement) => uniqueOutcomes.get(requirement._id)!);
+    const verdict = overallVerdict(orderedOutcomes);
+    const sourceUrls = [...new Set([
+      decision.sourceUrl,
+      ...assessments.flatMap((item) => (item.sourceUrl ? [item.sourceUrl] : [])),
+    ])].slice(0, 8);
     const sourceExcerpts = [
       ...assessments.flatMap((item) => (item.sourceExcerpt ? [item.sourceExcerpt] : [])),
-      ...(args.supportingQuote ? [args.supportingQuote] : []),
-    ].slice(0, 8);
+      ...orderedOutcomes.flatMap((item) => (item.supportingQuote ? [item.supportingQuote] : [])),
+    ].slice(0, 12);
+    const oldOutcomes = await ctx.db
+      .query("confirmationOutcomes")
+      .withIndex("by_replyId", (q) => q.eq("replyId", reply._id))
+      .take(20);
+    for (const outcome of oldOutcomes) await ctx.db.delete("confirmationOutcomes", outcome._id);
+    const now = Date.now();
+    for (const outcome of orderedOutcomes) {
+      await ctx.db.insert("confirmationOutcomes", {
+        decisionId: decision._id,
+        requestId: request._id,
+        replyId: reply._id,
+        requirementId: outcome.requirementId,
+        verdict: outcome.verdict,
+        summary: outcome.summary.slice(0, 1_000),
+        conditions: outcome.conditions.map((item) => item.slice(0, 500)).slice(0, 10),
+        ...(outcome.supportingQuote ? { supportingQuote: outcome.supportingQuote.slice(0, 900) } : {}),
+        createdAt: now,
+      });
+    }
     const oldCards = await ctx.db
       .query("proofCards")
       .withIndex("by_decisionId", (q) => q.eq("decisionId", decision._id))
-      .take(5);
-    for (const card of oldCards) await ctx.db.delete("proofCards", card._id);
-    await ctx.db.insert("proofCards", {
+      .take(10);
+    for (const card of oldCards) {
+      const oldItems = await ctx.db
+        .query("proofItems")
+        .withIndex("by_proofCardId_and_order", (q) => q.eq("proofCardId", card._id))
+        .take(20);
+      for (const item of oldItems) await ctx.db.delete("proofItems", item._id);
+      await ctx.db.delete("proofCards", card._id);
+    }
+    const proofCardId = await ctx.db.insert("proofCards", {
       decisionId: decision._id,
       ownerId: decision.ownerId,
       basis: "written_reply",
-      verdict: args.verdict,
+      verdict,
       exactRequirement: decision.requirementText,
       summary: args.summary.slice(0, 1_000),
-      conditions: args.conditions.map((item) => item.slice(0, 500)).slice(0, 10),
+      conditions: [...new Set(orderedOutcomes.flatMap((item) => item.conditions))].slice(0, 20),
       sourceUrls,
       sourceExcerpts,
       writtenMessage: reply.body,
@@ -514,21 +766,117 @@ export const storeReplyInterpretation = internalMutation({
       ...(request.recipient ? { recipient: request.recipient } : {}),
       ...(request.sentAt ? { sentAt: request.sentAt } : {}),
       receivedAt: reply.receivedAt,
-      createdAt: Date.now(),
+      createdAt: now,
     });
+    const assessmentByRequirement = new Map(
+      assessments.map((assessment) => [assessment.requirementId, assessment]),
+    );
+    for (const [order, requirement] of requirements.entries()) {
+      const outcome = uniqueOutcomes.get(requirement._id)!;
+      const assessment = assessmentByRequirement.get(requirement._id);
+      await ctx.db.insert("proofItems", {
+        proofCardId,
+        decisionId: decision._id,
+        requirementId: requirement._id,
+        verdict: outcome.verdict,
+        requirementText: requirement.text,
+        summary: outcome.summary.slice(0, 1_000),
+        conditions: outcome.conditions.map((item) => item.slice(0, 500)).slice(0, 10),
+        sourceUrls: [...new Set([
+          ...(assessment?.sourceUrl ? [assessment.sourceUrl] : []),
+          decision.sourceUrl,
+        ])].slice(0, 8),
+        sourceExcerpts: [
+          ...(assessment?.sourceExcerpt ? [assessment.sourceExcerpt] : []),
+          ...(outcome.supportingQuote ? [outcome.supportingQuote] : []),
+        ].slice(0, 8),
+        order,
+        createdAt: now,
+      });
+    }
+    const monitor = await ctx.db
+      .query("changeMonitors")
+      .withIndex("by_decisionId", (q) => q.eq("decisionId", decision._id))
+      .first();
+    if (monitor === null) {
+      await ctx.db.insert("changeMonitors", {
+        decisionId: decision._id,
+        ownerId: decision.ownerId,
+        active: true,
+        intervalHours: 24,
+        nextCheckAt: now + 24 * 60 * 60 * 1_000,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
     await ctx.db.patch("decisions", decision._id, {
-      status: args.verdict,
+      status: verdict,
       operationalFailure: undefined,
       operationalMessage: undefined,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
     await ctx.db.insert("decisionEvents", {
       decisionId: decision._id,
       fromStatus: "interpreting_reply",
-      toStatus: args.verdict,
+      toStatus: verdict,
       label: "Private Proof Card preserved",
-      occurredAt: Date.now(),
+      occurredAt: now,
     });
     return null;
+  },
+});
+
+export const createFollowUpDraft = mutation({
+  args: { proofCardId: v.id("proofCards") },
+  returns: v.id("confirmationRequests"),
+  handler: async (ctx, args) => {
+    const ownerId = await requireUserId(ctx);
+    const proofCard = await ctx.db.get("proofCards", args.proofCardId);
+    if (proofCard === null || proofCard.ownerId !== ownerId) {
+      throw new Error("404: Proof Card not found");
+    }
+    if (!proofCard.suggestedFollowUp) throw new Error("This reply does not need a follow-up");
+    const decision = await ctx.db.get("decisions", proofCard.decisionId);
+    if (decision === null || decision.ownerId !== ownerId) throw new Error("403: decision is private");
+    const requests = await ctx.db
+      .query("confirmationRequests")
+      .withIndex("by_decisionId_and_createdAt", (q) => q.eq("decisionId", decision._id))
+      .order("desc")
+      .take(10);
+    if (requests.some((request) => request.followUpCount >= 1)) {
+      throw new Error("The one permitted follow-up has already been prepared");
+    }
+    const prior = requests[0];
+    if (!prior?.recipient) throw new Error("The original recipient is unavailable");
+    const now = Date.now();
+    const requestToken = `GIW-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+    const requestId = await ctx.db.insert("confirmationRequests", {
+      decisionId: decision._id,
+      ownerId,
+      requestToken,
+      recipient: prior.recipient,
+      recipientSource: prior.recipientSource,
+      ...(prior.recipientSourceUrl ? { recipientSourceUrl: prior.recipientSourceUrl } : {}),
+      subject: `Follow-up: ${prior.subject.replace(/\s*\[GIW-[A-Z0-9]{10}\]\s*$/i, "").slice(0, 150)} [${requestToken}]`,
+      body: proofCard.suggestedFollowUp.slice(0, 8_000),
+      followUpCount: 1,
+      status: "draft",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.patch("decisions", decision._id, {
+      status: "awaiting_approval",
+      operationalFailure: undefined,
+      operationalMessage: undefined,
+      updatedAt: now,
+    });
+    await ctx.db.insert("decisionEvents", {
+      decisionId: decision._id,
+      fromStatus: decision.status,
+      toStatus: "awaiting_approval",
+      label: "One follow-up drafted — waiting for your approval",
+      occurredAt: now,
+    });
+    return requestId;
   },
 });

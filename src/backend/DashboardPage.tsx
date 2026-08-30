@@ -39,7 +39,7 @@ export default function DashboardPage() {
 
       <div className="wallet-tabs" role="tablist" aria-label="Filter decisions">
         <FilterTab active={filter === "waiting"} onClick={() => setFilter("waiting")} label="Waiting" count={counts.waiting} />
-        <FilterTab active={filter === "confirmed"} onClick={() => setFilter("confirmed")} label="Confirmed" count={counts.confirmed} />
+        <FilterTab active={filter === "confirmed"} onClick={() => setFilter("confirmed")} label="Proof Cards" count={counts.confirmed} />
         <FilterTab active={filter === "reply"} onClick={() => setFilter("reply")} label="Reply received" count={counts.reply} />
       </div>
 
@@ -101,7 +101,7 @@ function WalletLoading() {
 export function StatusStamp({ status }: { status: string }) {
   const labels: Record<string, string> = {
     draft: "Draft", scoping: "Scoping", researching: "Reading official pages", analyzing: "Building reliance map",
-    fully_established: "Established by source", confirmation_available: "Confirmation available", drafting_confirmation: "Drafting request",
+    fully_established: "Published by provider", confirmation_available: "Confirmation available", drafting_confirmation: "Drafting request",
     awaiting_approval: "Your approval needed", sending: "Sending", waiting: "Waiting for reply", reply_received: "Reply received",
     interpreting_reply: "Checking reply scope", confirmed: "Confirmed", confirmed_with_conditions: "Confirmed with conditions",
     partially_confirmed: "Partially confirmed", not_confirmed: "Not confirmed", needs_followup: "Needs follow-up", declined: "Declined",

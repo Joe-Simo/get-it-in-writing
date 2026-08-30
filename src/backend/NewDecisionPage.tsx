@@ -31,16 +31,16 @@ export default function NewDecisionPage() {
   return (
     <div className="new-decision-page">
       <Link to="/app" className="back-link"><ArrowLeft /> Promise Wallet</Link>
-      <header><p className="ink-label">New decision / 01</p><h1>What are you about<br /><em>to rely on?</em></h1><p>One official page. One exact requirement. We’ll show you what is written before anything is sent.</p></header>
+      <header><p className="ink-label">New decision / 01</p><h1>What are you about<br /><em>to rely on?</em></h1><p>Start with an official page and tell us everything that must be true. We’ll separate those needs into exact decision boundaries before anything is sent.</p></header>
       <form onSubmit={submit} className="new-decision-form ticket-shell">
         <section>
           <div className="form-step"><span>1</span><div><h2>Start with an official source</h2><p>Use the provider’s own website—not a review, search result, or social post.</p></div></div>
           <div className="input-with-icon mt-6"><Link2 /><Input aria-label="Official page" type="url" required autoComplete="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://official-site.com/page" /></div>
         </section>
         <section>
-          <div className="form-step"><span>2</span><div><h2>State exactly what must be true</h2><p>This sentence becomes the boundary for every source and reply.</p></div></div>
+          <div className="form-step"><span>2</span><div><h2>Tell us what must be true</h2><p>Write naturally. We’ll preserve dates, quantities, models, room types, and other conditions as separate boundaries.</p></div></div>
           <Label htmlFor="new-requirement" className="sr-only">What must be true?</Label>
-          <Textarea id="new-requirement" className="mt-6" required minLength={12} maxLength={800} rows={5} value={requirementText} onChange={(event) => setRequirementText(event.target.value)} placeholder="We need connecting rooms, not just adjacent rooms." />
+          <Textarea id="new-requirement" className="mt-6" required minLength={12} maxLength={800} rows={5} value={requirementText} onChange={(event) => setRequirementText(event.target.value)} placeholder="We need two connecting rooms for Dec 12–14, free cancellation until 48 hours before arrival, and no resort fee." />
           <span className="character-count">{requirementText.length}/800</span>
         </section>
         <section>
