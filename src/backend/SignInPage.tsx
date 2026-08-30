@@ -18,17 +18,17 @@ export default function SignInPage() {
           ◉ Signal Garden
         </Link>
         <div>
-          <p className="eyebrow text-[#c7ff4a]">Team access</p>
+          <p className="eyebrow text-[#c8ff53]">Customer control room</p>
           <h1 className="mt-5 max-w-3xl text-7xl font-semibold leading-[.86] tracking-[-.065em]">
-            Open your pre-bid workspace.
+            See the journey your customers actually experience.
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/55">
-            Private opportunities, compliance work, and review-ready briefs stay
-            scoped to your team.
+            Keep every check, confirmation, reply promise, and customer-impacting
+            incident inside one private workspace.
           </p>
         </div>
         <p className="text-xs text-white/60">
-          Password authentication is handled inside the isolated Convex backend.
+          Your workspace stays private. Public proof excludes customer and inbox data.
         </p>
       </section>
       <section className="flex items-center p-6 sm:p-12">
@@ -57,7 +57,7 @@ export default function SignInPage() {
           >
             <ArrowLeft className="size-4" /> Back to Signal Garden
           </Link>
-          <p className="eyebrow text-[#c7ff4a]">
+          <p className="eyebrow text-[#c8ff53]">
             {flow === "signIn" ? "Welcome back" : "Create your account"}
           </p>
           <h2 className="mt-4 font-editorial text-5xl tracking-[-.04em]">
@@ -100,7 +100,7 @@ export default function SignInPage() {
           <Button
             type="submit"
             disabled={pending}
-            className="mt-8 h-12 w-full rounded-full bg-[#c7ff4a] text-[#111612] hover:bg-[#d8ff82]"
+            className="mt-8 h-12 w-full rounded-full bg-[#c8ff53] text-[#111612] hover:bg-[#d8ff82]"
           >
             {pending && <LoaderCircle className="animate-spin" />}
             {flow === "signIn" ? "Sign in" : "Create account"}

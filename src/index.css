@@ -97,7 +97,7 @@
   html {
     scroll-behavior: smooth;
     font-family: var(--font-sans);
-    background: #f2eee5;
+    background: #f3efe6;
   }
 
   body {
@@ -115,7 +115,7 @@
 
   ::selection {
     color: #111612;
-    background: #c7ff4a;
+    background: #c8ff53;
   }
 }
 
@@ -140,7 +140,7 @@
     z-index: 100;
     transform: translateY(-160%);
     border-radius: 9999px;
-    background: #c7ff4a;
+    background: #c8ff53;
     padding: 0.6rem 1rem;
     color: #111612;
     font-size: 0.875rem;

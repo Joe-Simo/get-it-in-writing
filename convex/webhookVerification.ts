@@ -40,6 +40,7 @@ export const verifyAgentMail = internalAction({
       threadId: v.string(),
       messageId: v.string(),
       sender: v.string(),
+      subject: v.string(),
       body: v.string(),
     }),
   ),
@@ -59,6 +60,7 @@ export const verifyAgentMail = internalAction({
           thread_id?: string;
           message_id?: string;
           from?: string;
+          subject?: string;
           extracted_text?: string;
           text?: string;
           preview?: string;
@@ -82,6 +84,7 @@ export const verifyAgentMail = internalAction({
         threadId: message.thread_id,
         messageId: message.message_id,
         sender: message.from,
+        subject: (message.subject ?? "").slice(0, 500),
         body: (message.extracted_text ?? message.text ?? message.preview ?? "").slice(0, 12_000),
       };
     } catch {

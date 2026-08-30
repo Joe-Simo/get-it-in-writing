@@ -2,7 +2,7 @@
 
 - **Project:** Signal Garden
 - **Event:** Convex All Gas Hackathon
-- **What it does:** Watches live construction bid packages, versions every source change, routes amendment impacts to owners, and blocks release to estimating until the requirements are cleared.
+- **What it does:** Runs authorized mystery-shopper journeys across a business's public website, confirmation, and reply handoffs, then opens evidence-backed incidents when the customer outcome breaks.
 - **Live app:** https://resilient-salamander-937.convex.site
 - **Repo:** https://github.com/Joe-Simo/signal-garden-all-gas
 - **Frontend:** Convex static hosting
@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna, gpt-5.6-terra
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T14:36:46Z
+- **Last updated:** 2026-08-30T15:43:13Z
 
 ## Log
 
@@ -67,20 +67,31 @@ reply. Added owner-only review-route settings and recipient authorization tests
 
 ### 2026-08-30 - working tree
 
-Turned Signal Garden into recurring bid-package change control rather than a
-one-time AI report. Every check now records an immutable package version,
-extracts exact added and removed source text, routes amendment impacts to human
-owners, tracks external follow-ups and replies, and independently recomputes a
-release gate before estimating can proceed. A real production solicitation is
-on version 1 with daily monitoring and six honestly unresolved release holds
-(`convex/watches.ts`, `convex/release.ts`, `convex/outreach.ts`).
+Rebuilt Signal Garden as a general-purpose customer-journey watchdog for any
+business that depends on public contact, lead, or quote-request handoffs. The
+owner enters a website, Firecrawl discovers safe paths, OpenAI structures the
+journey, and an explicit owner authorization is required before a clearly
+labeled QA customer submits the public form. Convex stores the journey, runs,
+checkpoints, schedules, email expectations, incidents, and revocable public
+proof (`convex/journeys.ts`, `convex/journeyActions.ts`, `convex/schema.ts`).
 
-Rebuilt the public site and private control room around the live package,
-impact, ownership, and release workflow. Verified 25 focused tests, strict
-lint and type checking, the production build, all three WebGPU shaders, eight
-desktop/mobile accessibility journeys, and one authenticated development
-control-room journey per viewport without sending a crawl or email from the
-tests.
+Added a real AgentMail confirmation loop with signed-webhook handling and a
+minute-level mailbox reconciliation fallback. Provider failures are separated
+from customer incidents, overlapping runs are blocked, and a team member can
+cancel an active run without manufacturing a false incident. No customer
+identity, inbox address, form content, private note, provider identifier, or
+secret is exposed by the public report.
 
-Public readiness brief:
-https://resilient-salamander-937.convex.site/garden/should-we-bid-on-the-construction-of-86cb535e
+Dogfooded the complete production path against Signal Garden itself. The first
+Firecrawl Interact attempt exposed an incorrect timeout unit; after correcting
+it to seconds and adding explicit session cleanup, Firecrawl reached the live
+site and completed the authorized request. AgentMail recorded the correlated
+confirmation addressed to the QA customer, and Convex reconciled all three
+checkpoints into one healthy run. Verified strict lint and type checking, 39
+focused tests, all three WebGPU shaders, the production build, nine local
+desktop/mobile browser journeys, and zero Axe violations or console errors on
+the live landing and proof pages at desktop and mobile sizes before publishing
+the customer-safe proof on Convex Static Hosting.
+
+Public journey proof:
+https://resilient-salamander-937.convex.site/proof/setup-request-to-confirmation-cd8df1tc

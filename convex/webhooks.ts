@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
+import { containsCorrelationToken, senderDomain } from "./lib/journeySafety";
 
 export const acceptFirecrawl = internalMutation({
   args: { deliveryId: v.string(), crawlJobId: v.string() },
@@ -68,6 +69,7 @@ export const acceptAgentMail = internalMutation({
     threadId: v.string(),
     messageId: v.string(),
     sender: v.string(),
+    subject: v.string(),
     body: v.string(),
   },
   returns: v.boolean(),
@@ -84,56 +86,91 @@ export const acceptAgentMail = internalMutation({
       .withIndex("by_threadId", (q) => q.eq("threadId", args.threadId))
       .unique();
     if (
-      delivery === null ||
-      delivery.inboxId !== args.inboxId ||
-      normalizeAddress(args.sender) !== delivery.recipientEmail.toLowerCase()
+      delivery !== null &&
+      delivery.inboxId === args.inboxId &&
+      normalizeAddress(args.sender) === delivery.recipientEmail.toLowerCase()
     ) {
-      return false;
+      const duplicateMessage = await ctx.db
+        .query("inboundReplies")
+        .withIndex("by_messageId", (q) => q.eq("messageId", args.messageId))
+        .unique();
+      if (duplicateMessage !== null) return false;
+      await ctx.db.insert("webhookReceipts", {
+        provider: "agentmail",
+        deliveryId: args.deliveryId,
+        status: "accepted",
+        receivedAt: Date.now(),
+      });
+      await ctx.db.insert("inboundReplies", {
+        deliveryId: delivery._id,
+        missionId: delivery.missionId,
+        messageId: args.messageId,
+        senderEmail: normalizeAddress(args.sender),
+        intent: classifyIntent(args.body),
+        body: args.body,
+        status: "pending",
+        receivedAt: Date.now(),
+      });
+      await ctx.db.insert("missionEvents", {
+        missionId: delivery.missionId,
+        type: "email",
+        label: "Verified email reply received",
+        detail:
+          "Pending review in Signal Garden; no crawl was started automatically.",
+        createdAt: Date.now(),
+      });
+      if (delivery.purpose === "impact_followup") {
+        const threads = await ctx.db
+          .query("outreachThreads")
+          .withIndex("by_missionId", (q) => q.eq("missionId", delivery.missionId))
+          .take(100);
+        const outreach = threads.find(
+          (thread) => thread.deliveryId === delivery._id,
+        );
+        if (outreach !== undefined) {
+          await ctx.db.patch("outreachThreads", outreach._id, {
+            status: "replied",
+            updatedAt: Date.now(),
+          });
+        }
+      }
+      return true;
     }
-    const duplicateMessage = await ctx.db
-      .query("inboundReplies")
-      .withIndex("by_messageId", (q) => q.eq("messageId", args.messageId))
-      .unique();
-    if (duplicateMessage !== null) return false;
+
+    const domain = senderDomain(args.sender);
+    const content = `${args.subject}\n${args.body}`;
+    const waiting = await ctx.db
+      .query("journeyEmailExpectations")
+      .withIndex("by_inboxId_and_status", (q) =>
+        q.eq("inboxId", args.inboxId).eq("status", "waiting"),
+      )
+      .order("desc")
+      .take(20);
+    const expectation = waiting.find(
+      (candidate) =>
+        candidate.deadlineAt >= Date.now() &&
+        (containsCorrelationToken(content, candidate.correlationToken) ||
+          (candidate.expectedSenderDomain !== undefined &&
+            candidate.expectedSenderDomain === domain)),
+    );
+    if (expectation === undefined) return false;
     await ctx.db.insert("webhookReceipts", {
       provider: "agentmail",
       deliveryId: args.deliveryId,
       status: "accepted",
       receivedAt: Date.now(),
     });
-    await ctx.db.insert("inboundReplies", {
-      deliveryId: delivery._id,
-      missionId: delivery.missionId,
+    const evidenceExcerpt = (args.subject || "Customer email received")
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email removed]")
+      .replace(new RegExp(expectation.correlationToken, "gi"), "[reference removed]")
+      .replace(/\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[phone removed]")
+      .slice(0, 500);
+    await ctx.scheduler.runAfter(0, internal.journeys.recordEmailReceived, {
+      expectationId: expectation._id,
       messageId: args.messageId,
-      senderEmail: normalizeAddress(args.sender),
-      intent: classifyIntent(args.body),
-      body: args.body,
-      status: "pending",
-      receivedAt: Date.now(),
+      senderDomain: domain,
+      evidenceExcerpt,
     });
-    await ctx.db.insert("missionEvents", {
-      missionId: delivery.missionId,
-      type: "email",
-      label: "Verified email reply received",
-      detail:
-        "Pending review in Signal Garden; no crawl was started automatically.",
-      createdAt: Date.now(),
-    });
-    if (delivery.purpose === "impact_followup") {
-      const threads = await ctx.db
-        .query("outreachThreads")
-        .withIndex("by_missionId", (q) => q.eq("missionId", delivery.missionId))
-        .take(100);
-      const outreach = threads.find(
-        (thread) => thread.deliveryId === delivery._id,
-      );
-      if (outreach !== undefined) {
-        await ctx.db.patch("outreachThreads", outreach._id, {
-          status: "replied",
-          updatedAt: Date.now(),
-        });
-      }
-    }
     return true;
   },
 });

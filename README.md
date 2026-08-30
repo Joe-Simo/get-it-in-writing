@@ -1,52 +1,60 @@
 # Signal Garden
 
-Signal Garden turns a consequential question and trusted URLs into a bounded,
-source-linked decision brief a team can inspect, challenge, and review by
-email. It is a production application built for the Convex All Gas Hackathon,
-not a staged showcase.
+Signal Garden is an always-on mystery shopper for the customer journeys a
+business cannot afford to lose. It checks a real public path—such as a contact
+or quote form—then follows the confirmation and reply handoffs that happen
+after the click. When a customer-facing step breaks or a promised response is
+late, the team gets an evidence-backed incident instead of discovering the
+problem from a lost lead.
 
 [Open Signal Garden](https://resilient-salamander-937.convex.site) ·
-[Inspect the live federal renovation bid decision](https://resilient-salamander-937.convex.site/garden/what-must-a-small-construction-firm--52a65131)
+[Inspect the latest real run](https://resilient-salamander-937.convex.site/proof/setup-request-to-confirmation-cd8df1tc)
 
 ## Why it exists
 
-Agentic research becomes difficult to trust when scope, citations, and human
-decisions disappear behind a generated brief. Signal Garden keeps the research
-boundary and the handoff to people visible:
+Uptime monitoring can prove that a page returned `200 OK`. It cannot prove that
+a customer completed the form, saw a success state, received an acknowledgement,
+or got the follow-up the business promised. Signal Garden monitors that whole
+customer outcome.
 
-- Firecrawl missions declare page and depth budgets before collection.
-- OpenAI structured outputs attach extracted claims to source passages.
-- Convex streams mission state, evidence, notes, reviews, and public gardens.
-- AgentMail replies become verified review items; email alone cannot expand a
-  crawl budget or spend credits.
-- vgpu renders the evidence field with validated WebGPU shaders and an
-  accessible static mode.
+The product is useful to any business whose revenue or service depends on a
+public digital handoff: agencies, home-service companies, clinics, property
+managers, professional services, local businesses, and SaaS teams.
 
-The featured public decision is real production output. Firecrawl processed
-three official federal and safety sources, OpenAI structured 28 linked claims,
-Convex produced and published the brief, and AgentMail delivered it to the
-existing team member. The public projection excludes identities, email
-addresses, message contents, private notes, and webhook records server-side.
+## How a journey works
 
-## Product flow
+1. The owner enters the business website.
+2. Firecrawl maps the public site and OpenAI proposes safe, testable journeys.
+3. The owner reviews the exact path and explicitly authorizes form testing.
+4. A clearly identified QA customer completes the approved public request once.
+5. AgentMail observes the correlated confirmation and any expected human reply.
+6. Convex streams every checkpoint, opens incidents, schedules repeat runs, and
+   produces a customer-safe public proof page.
 
-1. Create a team and frame a question with trusted starting URLs.
-2. Review the page, depth, and domain limits before launching the workflow.
-3. Follow the live Convex timeline while Firecrawl collects bounded evidence.
-4. Inspect source-linked claims and add private team notes.
-5. Send a brief through AgentMail and review verified replies in the app.
-6. Publish or revoke a read-only decision page for collaborators or judges.
+Signal Garden never enters payment, login, government ID, health, financial,
+or other sensitive data; bypasses a captcha; uploads files; books scarce time;
+or submits without owner authorization. Provider failures are recorded as
+execution errors, not misrepresented as customer incidents.
+
+## Real production evidence
+
+The featured proof page comes from a real owner-authorized run against Signal
+Garden's own production setup journey. Firecrawl reached the live
+`convex.site`, completed its public request form, and observed the visible
+success state. AgentMail recorded the correlated confirmation addressed to the
+QA customer. Convex joined those signals into one healthy run. The public
+projection excludes customer identities, inbox addresses, form contents,
+private notes, provider identifiers, and secrets.
 
 ## Stack
 
 - React, TypeScript, Vite, Tailwind CSS, and shadcn/ui
-- Convex Auth, realtime database, actions, HTTP actions, scheduled functions,
-  Workflow, and Static Hosting
-- OpenAI Responses API using `gpt-5.6-luna` for extraction and
-  `gpt-5.6-terra` for synthesis
-- Firecrawl
-- AgentMail with Svix webhook verification
-- vgpu and WGSL
+- Convex Auth, realtime database, actions, HTTP actions, crons, scheduled
+  functions, Workflow, and Static Hosting
+- OpenAI structured outputs for safe journey discovery and evidence evaluation
+- Firecrawl scrape and Interact for real public journey execution
+- AgentMail sending, webhooks, and mailbox reconciliation
+- vgpu and WGSL for the live visual field
 
 ## Run locally
 
@@ -56,8 +64,8 @@ Install dependencies with Bun:
 bun install
 ```
 
-Connect a new Convex deployment for your own environment, then provide the
-required server-side variables through Convex rather than client files:
+Connect a new Convex deployment for your own environment. Keep every secret in
+Convex server-side environment variables, never in client files:
 
 ```text
 OPENAI_API_KEY
@@ -70,7 +78,7 @@ SITE_URL
 PUBLIC_APP_URL
 ```
 
-Start the app and Convex development workflow:
+Start the frontend and Convex development workflow:
 
 ```bash
 bun run dev:full
@@ -81,6 +89,7 @@ bun run dev:full
 ```bash
 bun run lint
 bun run test
+bun run test:e2e
 bun run check:gpu
 bun run build
 ```

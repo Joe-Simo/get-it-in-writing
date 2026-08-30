@@ -10,4 +10,25 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "run due customer journeys",
+  { minutes: 30 },
+  internal.journeyActions.runDue,
+  {},
+);
+
+crons.interval(
+  "reconcile AgentMail journey confirmations",
+  { minutes: 1 },
+  internal.journeyActions.reconcileAgentMail,
+  {},
+);
+
+crons.interval(
+  "open incidents for overdue customer replies",
+  { minutes: 5 },
+  internal.journeys.expireDueEmailExpectations,
+  {},
+);
+
 export default crons;

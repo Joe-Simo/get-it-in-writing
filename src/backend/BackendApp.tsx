@@ -5,8 +5,8 @@ import SignInPage from "@/backend/SignInPage";
 import { WorkspaceLoader } from "@/backend/WorkspaceLoader";
 
 const DashboardPage = lazy(() => import("@/backend/DashboardPage"));
-const MissionWorkspacePage = lazy(
-  () => import("@/backend/MissionWorkspacePage"),
+const JourneyWorkspacePage = lazy(
+  () => import("@/backend/JourneyWorkspacePage"),
 );
 
 export default function BackendApp() {
@@ -17,8 +17,8 @@ export default function BackendApp() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route
-              path="/missions/:missionId"
-              element={<MissionWorkspacePage />}
+              path="/journeys/:journeyId"
+              element={<JourneyWorkspacePage />}
             />
             <Route path="*" element={<Navigate to="." replace />} />
           </Routes>
