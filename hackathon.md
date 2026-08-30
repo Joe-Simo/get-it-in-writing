@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T21:19:04Z
+- **Last updated:** 2026-08-30T21:40:32Z
 
 ## Log
 
@@ -168,3 +168,15 @@ Added delivery-failure and high-risk safety coverage. Verified strict lint and
 type checking, 22 focused tests, the production build, and 14 applicable
 desktop/mobile browser journeys covering keyboard access, reduced motion,
 forced colors, zoom-equivalent layout, and the no-WebGPU fallback.
+
+### 2026-08-30 - e49d1bf
+
+Made unsupported decisions stop without displaying false research progress and
+added owner-authorized, two-step deletion for an entire private case graph.
+Deletion removes requirements, sources, assessments, evidence, drafts, replies,
+Proof Cards, monitors, and timeline events (`convex/decisions.ts`,
+`src/backend/DecisionPage.tsx`).
+
+Added ownership and cascading-deletion coverage. Deployed the correction and
+verified strict lint and type checking, 23 focused tests, the production build,
+and 14 applicable desktop/mobile browser journeys.
