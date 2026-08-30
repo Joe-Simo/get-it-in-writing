@@ -2,7 +2,7 @@
 
 - **Project:** Signal Garden
 - **Event:** Convex All Gas Hackathon
-- **What it does:** Turns a consequential question and trusted URLs into a bounded, source-linked brief that a team can challenge and review by email.
+- **What it does:** Turns a federal construction solicitation into a source-linked compliance matrix so small contractors can find bid killers, assign readiness work, and make a human bid/no-bid decision before pricing.
 - **Live app:** https://resilient-salamander-937.convex.site
 - **Repo:** https://github.com/Joe-Simo/signal-garden-all-gas
 - **Frontend:** Convex static hosting
@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna, gpt-5.6-terra
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T03:43:00Z
+- **Last updated:** 2026-08-30T04:09:12Z
 
 ## Log
 
@@ -64,3 +64,16 @@ signed reply returned through the verified webhook, and the team completed the
 manual review step. Production proof now reports one delivery and one verified
 reply. Added owner-only review-route settings and recipient authorization tests
 (`convex/teams.ts`, `convex/emails.ts`, `convex/emails.test.ts`).
+
+### 2026-08-30 - working tree
+
+Rebuilt Signal Garden as a pre-bid readiness workspace for small federal
+construction contractors. A real active Navy solicitation now produces 11
+source-linked requirements, a compliance matrix, human-owned bid/no-bid status,
+and a brief that flags a conflicting site-visit attendee deadline instead of
+inventing certainty. Added indexed Convex requirements, authenticated updates,
+privacy-safe public projections, and focused tests; lint, 19 tests, production
+build, and all three WebGPU shader checks pass.
+
+Public readiness brief:
+https://resilient-salamander-937.convex.site/garden/should-we-bid-on-the-construction-of-86cb535e

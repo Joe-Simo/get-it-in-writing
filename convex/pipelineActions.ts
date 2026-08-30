@@ -40,6 +40,25 @@ const claimExtraction = z.object({
         confidence: z.number().min(0).max(1),
         quote: z.string(),
         support: z.enum(["supports", "challenges", "context"]),
+        requirement: z
+          .object({
+            category: z.enum([
+              "submission",
+              "bonding",
+              "insurance",
+              "eligibility",
+              "labor",
+              "safety",
+              "schedule",
+              "technical",
+              "pricing",
+              "other",
+            ]),
+            criticality: z.enum(["disqualifier", "high", "standard"]),
+            requiredWithBid: z.boolean(),
+            dueDateText: z.string().nullable(),
+          })
+          .nullable(),
       }),
     )
     .max(12),
@@ -120,7 +139,8 @@ export const submitCrawl = internalAction({
       throw new Error(`Firecrawl rejected the seed (${response.status})`);
     }
     const parsed = crawlResponse.parse(await response.json());
-    if (!parsed.success) throw new Error("Firecrawl rejected the crawl request");
+    if (!parsed.success)
+      throw new Error("Firecrawl rejected the crawl request");
     await ctx.runMutation(internal.pipeline.markSeedStarted, {
       seedId: args.seedId,
       crawlJobId: parsed.id,
@@ -131,7 +151,14 @@ export const submitCrawl = internalAction({
 
 async function extractClaims(
   openai: OpenAI,
-  question: string,
+  mission: {
+    question: string;
+    workflowKind?: "research" | "prebid";
+    opportunityTitle?: string;
+    solicitationUrl?: string;
+    solicitationNumber?: string;
+    agency?: string;
+  },
   page: z.infer<typeof crawlPage>,
 ) {
   const content = page.markdown?.slice(0, 90_000) ?? "";
@@ -142,11 +169,11 @@ async function extractClaims(
       {
         role: "system",
         content:
-          "Extract only claims explicitly supported by the supplied source. Quotes must be exact substrings. Mark uncertainty rather than inferring facts. Return at most 12 concise claims.",
+          "Extract only claims explicitly supported by the supplied source. Quotes must be exact substrings. Mark uncertainty rather than inferring facts. For a pre-bid workspace, set requirement only when the source explicitly states an obligation, submission item, deadline, eligibility condition, bond, insurance, labor, safety, technical, schedule, or pricing instruction relevant to bidding. A disqualifier is something the source says can make the bid late, nonresponsive, ineligible, or rejected; do not infer that severity. requiredWithBid is true only when the item must accompany the bid. Preserve any due date as source text instead of normalizing it. Return at most 12 concise claims.",
       },
       {
         role: "user",
-        content: `Research question: ${question}\n\nSOURCE:\n${content}`,
+        content: `Workflow: ${mission.workflowKind ?? "research"}\nOpportunity: ${mission.opportunityTitle ?? "Not specified"}\nSolicitation: ${mission.solicitationNumber ?? "Not specified"}\nAgency: ${mission.agency ?? "Not specified"}\nPrimary solicitation URL: ${mission.solicitationUrl ?? "Not specified"}\nResearch question: ${mission.question}\nSource URL: ${page.metadata?.sourceURL ?? page.metadata?.url ?? "Unknown"}\n\nSOURCE:\n${content}`,
       },
     ],
     text: { format: zodTextFormat(claimExtraction, "claim_extraction") },
@@ -188,11 +215,7 @@ export const processCrawlJob = internalAction({
         const content = page.markdown?.slice(0, 180_000) ?? "";
         const url = page.metadata?.sourceURL ?? page.metadata?.url;
         if (!url || content.length < 80) continue;
-        const claims = await extractClaims(
-          openai,
-          input.mission.question,
-          page,
-        );
+        const claims = await extractClaims(openai, input.mission, page);
         sources.push({
           url,
           title: page.metadata?.title?.slice(0, 240) || new URL(url).hostname,
@@ -248,11 +271,11 @@ export const processCrawlJob = internalAction({
           {
             role: "system",
             content:
-              "Write a decision-ready research brief from only the supplied claims. Cite claim IDs in square brackets. Surface disputes and unknowns. Do not add outside facts.",
+              "Write a decision-ready pre-bid brief from only the supplied claims and extracted requirements. Cite claim IDs in square brackets. Lead with a bid/no-bid readiness assessment, list disqualifiers and required-with-bid items, then surface unresolved facts that prevent a defensible decision. Do not make the final human bid/no-bid decision and do not add outside facts.",
           },
           {
             role: "user",
-            content: `Question: ${updated.mission.question}\n\nClaims:\n${JSON.stringify(citationInput)}`,
+            content: `Opportunity: ${updated.mission.opportunityTitle ?? "Not specified"}\nAgency: ${updated.mission.agency ?? "Not specified"}\nSolicitation: ${updated.mission.solicitationNumber ?? "Not specified"}\nQuestion: ${updated.mission.question}\n\nClaims:\n${JSON.stringify(citationInput)}\n\nExtracted requirements:\n${JSON.stringify(updated.requirements)}`,
           },
         ],
         text: { format: zodTextFormat(briefOutput, "research_brief") },

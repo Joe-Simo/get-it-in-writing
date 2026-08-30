@@ -61,6 +61,18 @@ export default defineSchema({
     teamId: v.id("teams"),
     createdBy: v.id("users"),
     question: v.string(),
+    workflowKind: v.optional(
+      v.union(v.literal("research"), v.literal("prebid")),
+    ),
+    opportunityTitle: v.optional(v.string()),
+    solicitationUrl: v.optional(v.string()),
+    solicitationNumber: v.optional(v.string()),
+    agency: v.optional(v.string()),
+    bidDueAt: v.optional(v.number()),
+    decision: v.optional(
+      v.union(v.literal("undecided"), v.literal("bid"), v.literal("no_bid")),
+    ),
+    decisionRationale: v.optional(v.string()),
     status: missionStatus,
     pageBudget: v.number(),
     depth: v.number(),
@@ -137,6 +149,45 @@ export default defineSchema({
   })
     .index("by_claimId", ["claimId"])
     .index("by_missionId", ["missionId"]),
+  requirements: defineTable({
+    missionId: v.id("missions"),
+    sourceId: v.id("sources"),
+    claimId: v.id("claims"),
+    text: v.string(),
+    category: v.union(
+      v.literal("submission"),
+      v.literal("bonding"),
+      v.literal("insurance"),
+      v.literal("eligibility"),
+      v.literal("labor"),
+      v.literal("safety"),
+      v.literal("schedule"),
+      v.literal("technical"),
+      v.literal("pricing"),
+      v.literal("other"),
+    ),
+    criticality: v.union(
+      v.literal("disqualifier"),
+      v.literal("high"),
+      v.literal("standard"),
+    ),
+    status: v.union(
+      v.literal("open"),
+      v.literal("satisfied"),
+      v.literal("missing"),
+      v.literal("not_applicable"),
+    ),
+    requiredWithBid: v.boolean(),
+    sourceQuote: v.string(),
+    dueDateText: v.optional(v.string()),
+    ownerLabel: v.optional(v.string()),
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_missionId", ["missionId"])
+    .index("by_missionId_and_status", ["missionId", "status"])
+    .index("by_claimId", ["claimId"]),
   briefs: defineTable({
     missionId: v.id("missions"),
     teamId: v.id("teams"),

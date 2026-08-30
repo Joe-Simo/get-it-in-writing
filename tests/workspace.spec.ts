@@ -17,7 +17,7 @@ test("a team can frame and safely cancel a bounded mission", async ({
   await page.getByLabel("Team name").fill(`Evidence Lab ${runId}`);
   await page.getByRole("button", { name: /create private team/i }).click();
   await expect(
-    page.getByRole("heading", { name: "Your decisions." }),
+    page.getByRole("heading", { name: "Protect estimator time." }),
   ).toBeVisible();
   await expect(page.getByText("Deployment readiness")).toBeVisible();
   await expect(page.getByText("OpenAI", { exact: true })).toBeVisible();
@@ -36,18 +36,21 @@ test("a team can frame and safely cancel a bounded mission", async ({
   const dashboardResults = await new AxeBuilder({ page }).analyze();
   expect(dashboardResults.violations).toEqual([]);
 
-  await page.getByRole("button", { name: /research a decision/i }).click();
+  await page.getByRole("button", { name: /analyze a solicitation/i }).click();
   await page
-    .getByLabel("Research question")
-    .fill(
-      "Which documented Convex patterns keep a realtime research workflow trustworthy?",
-    );
-  await page.getByLabel("Trusted seed URLs").fill("https://docs.convex.dev/");
-  await page.getByRole("button", { name: /create bounded research/i }).click();
+    .getByLabel("Opportunity")
+    .fill("Public building fire protection upgrade");
+  await page
+    .getByLabel("Public solicitation URL")
+    .fill("https://sam.gov/opp/test-opportunity/view");
+  await page.getByRole("button", { name: /create pre-bid workspace/i }).click();
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "Which documented Convex patterns",
+    "Public building fire protection upgrade",
   );
+  await expect(
+    page.getByText("Compliance matrix", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText("Verified replies", { exact: true }),
   ).toBeVisible();
@@ -65,7 +68,7 @@ test("a team can frame and safely cancel a bounded mission", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "Stop workflow" }).click();
   await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Stop research" }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Stop research" })).toHaveCount(
+    0,
+  );
 });

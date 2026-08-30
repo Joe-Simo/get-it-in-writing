@@ -17,6 +17,14 @@ const missionStatus = v.union(
 const missionSummary = v.object({
   _id: v.id("missions"),
   question: v.string(),
+  workflowKind: v.optional(v.union(v.literal("research"), v.literal("prebid"))),
+  opportunityTitle: v.optional(v.string()),
+  solicitationNumber: v.optional(v.string()),
+  agency: v.optional(v.string()),
+  bidDueAt: v.optional(v.number()),
+  decision: v.optional(
+    v.union(v.literal("undecided"), v.literal("bid"), v.literal("no_bid")),
+  ),
   status: missionStatus,
   pageBudget: v.number(),
   depth: v.number(),
@@ -30,6 +38,18 @@ const workspaceResult = v.object({
   mission: v.object({
     _id: v.id("missions"),
     question: v.string(),
+    workflowKind: v.optional(
+      v.union(v.literal("research"), v.literal("prebid")),
+    ),
+    opportunityTitle: v.optional(v.string()),
+    solicitationUrl: v.optional(v.string()),
+    solicitationNumber: v.optional(v.string()),
+    agency: v.optional(v.string()),
+    bidDueAt: v.optional(v.number()),
+    decision: v.optional(
+      v.union(v.literal("undecided"), v.literal("bid"), v.literal("no_bid")),
+    ),
+    decisionRationale: v.optional(v.string()),
     status: missionStatus,
     pageBudget: v.number(),
     depth: v.number(),
@@ -125,6 +145,44 @@ const workspaceResult = v.object({
       receivedAt: v.number(),
     }),
   ),
+  requirements: v.array(
+    v.object({
+      _id: v.id("requirements"),
+      sourceId: v.id("sources"),
+      claimId: v.id("claims"),
+      text: v.string(),
+      category: v.union(
+        v.literal("submission"),
+        v.literal("bonding"),
+        v.literal("insurance"),
+        v.literal("eligibility"),
+        v.literal("labor"),
+        v.literal("safety"),
+        v.literal("schedule"),
+        v.literal("technical"),
+        v.literal("pricing"),
+        v.literal("other"),
+      ),
+      criticality: v.union(
+        v.literal("disqualifier"),
+        v.literal("high"),
+        v.literal("standard"),
+      ),
+      status: v.union(
+        v.literal("open"),
+        v.literal("satisfied"),
+        v.literal("missing"),
+        v.literal("not_applicable"),
+      ),
+      requiredWithBid: v.boolean(),
+      sourceQuote: v.string(),
+      dueDateText: v.optional(v.string()),
+      ownerLabel: v.optional(v.string()),
+      note: v.optional(v.string()),
+      sourceTitle: v.string(),
+      sourceUrl: v.string(),
+    }),
+  ),
   garden: v.union(
     v.null(),
     v.object({
@@ -152,6 +210,14 @@ export const create = mutation({
     seeds: v.array(v.string()),
     pageBudget: v.number(),
     depth: v.number(),
+    workflowKind: v.optional(
+      v.union(v.literal("research"), v.literal("prebid")),
+    ),
+    opportunityTitle: v.optional(v.string()),
+    solicitationUrl: v.optional(v.string()),
+    solicitationNumber: v.optional(v.string()),
+    agency: v.optional(v.string()),
+    bidDueAt: v.optional(v.number()),
   },
   returns: v.id("missions"),
   handler: async (ctx, args) => {
@@ -172,8 +238,39 @@ export const create = mutation({
     if (!Number.isInteger(args.depth) || args.depth < 0 || args.depth > 2) {
       throw new Error("Crawl depth must be 0, 1, or 2");
     }
+    const workflowKind = args.workflowKind ?? "research";
+    const opportunityTitle = args.opportunityTitle?.trim();
+    if (
+      workflowKind === "prebid" &&
+      (opportunityTitle === undefined ||
+        opportunityTitle.length < 3 ||
+        opportunityTitle.length > 180)
+    ) {
+      throw new Error(
+        "Opportunity titles must be between 3 and 180 characters",
+      );
+    }
+    const solicitationUrl =
+      args.solicitationUrl === undefined
+        ? undefined
+        : parseSeedUrl(args.solicitationUrl.trim());
+    if (workflowKind === "prebid" && solicitationUrl === undefined) {
+      throw new Error("Add the public solicitation URL for this opportunity");
+    }
+    if (
+      args.bidDueAt !== undefined &&
+      (!Number.isFinite(args.bidDueAt) ||
+        args.bidDueAt < Date.UTC(2000, 0, 1) ||
+        args.bidDueAt > Date.UTC(2100, 0, 1))
+    ) {
+      throw new Error("Bid deadline must be a valid date");
+    }
     const seeds = [
-      ...new Set(args.seeds.map((seed) => parseSeedUrl(seed.trim()))),
+      ...new Set(
+        [solicitationUrl, ...args.seeds]
+          .filter((seed): seed is string => seed !== undefined)
+          .map((seed) => parseSeedUrl(seed.trim())),
+      ),
     ];
     if (seeds.length < 1 || seeds.length > 4) {
       throw new Error("Add between one and four unique seed URLs");
@@ -186,6 +283,17 @@ export const create = mutation({
       teamId: args.teamId,
       createdBy: userId,
       question,
+      workflowKind,
+      ...(opportunityTitle === undefined ? {} : { opportunityTitle }),
+      ...(solicitationUrl === undefined ? {} : { solicitationUrl }),
+      ...(args.solicitationNumber?.trim()
+        ? { solicitationNumber: args.solicitationNumber.trim().slice(0, 120) }
+        : {}),
+      ...(args.agency?.trim()
+        ? { agency: args.agency.trim().slice(0, 180) }
+        : {}),
+      ...(args.bidDueAt === undefined ? {} : { bidDueAt: args.bidDueAt }),
+      decision: "undecided",
       status: "draft",
       pageBudget: args.pageBudget,
       depth: args.depth,
@@ -231,6 +339,18 @@ export const list = query({
     return missions.map((mission) => ({
       _id: mission._id,
       question: mission.question,
+      ...(mission.workflowKind === undefined
+        ? {}
+        : { workflowKind: mission.workflowKind }),
+      ...(mission.opportunityTitle === undefined
+        ? {}
+        : { opportunityTitle: mission.opportunityTitle }),
+      ...(mission.solicitationNumber === undefined
+        ? {}
+        : { solicitationNumber: mission.solicitationNumber }),
+      ...(mission.agency === undefined ? {} : { agency: mission.agency }),
+      ...(mission.bidDueAt === undefined ? {} : { bidDueAt: mission.bidDueAt }),
+      ...(mission.decision === undefined ? {} : { decision: mission.decision }),
       status: mission.status,
       pageBudget: mission.pageBudget,
       depth: mission.depth,
@@ -256,6 +376,7 @@ export const getWorkspace = query({
       briefs,
       notes,
       replies,
+      requirements,
       garden,
       team,
     ] = await Promise.all([
@@ -296,6 +417,10 @@ export const getWorkspace = query({
         .order("desc")
         .take(100),
       ctx.db
+        .query("requirements")
+        .withIndex("by_missionId", (q) => q.eq("missionId", args.missionId))
+        .take(300),
+      ctx.db
         .query("publicGardens")
         .withIndex("by_missionId", (q) => q.eq("missionId", args.missionId))
         .unique(),
@@ -305,6 +430,28 @@ export const getWorkspace = query({
       mission: {
         _id: mission._id,
         question: mission.question,
+        ...(mission.workflowKind === undefined
+          ? {}
+          : { workflowKind: mission.workflowKind }),
+        ...(mission.opportunityTitle === undefined
+          ? {}
+          : { opportunityTitle: mission.opportunityTitle }),
+        ...(mission.solicitationUrl === undefined
+          ? {}
+          : { solicitationUrl: mission.solicitationUrl }),
+        ...(mission.solicitationNumber === undefined
+          ? {}
+          : { solicitationNumber: mission.solicitationNumber }),
+        ...(mission.agency === undefined ? {} : { agency: mission.agency }),
+        ...(mission.bidDueAt === undefined
+          ? {}
+          : { bidDueAt: mission.bidDueAt }),
+        ...(mission.decision === undefined
+          ? {}
+          : { decision: mission.decision }),
+        ...(mission.decisionRationale === undefined
+          ? {}
+          : { decisionRationale: mission.decisionRationale }),
         status: mission.status,
         pageBudget: mission.pageBudget,
         depth: mission.depth,
@@ -366,6 +513,36 @@ export const getWorkspace = query({
         status: reply.status,
         receivedAt: reply.receivedAt,
       })),
+      requirements: requirements.flatMap((requirement) => {
+        const source = sources.find(
+          (candidate) => candidate._id === requirement.sourceId,
+        );
+        if (source === undefined) return [];
+        return [
+          {
+            _id: requirement._id,
+            sourceId: requirement.sourceId,
+            claimId: requirement.claimId,
+            text: requirement.text,
+            category: requirement.category,
+            criticality: requirement.criticality,
+            status: requirement.status,
+            requiredWithBid: requirement.requiredWithBid,
+            sourceQuote: requirement.sourceQuote,
+            ...(requirement.dueDateText === undefined
+              ? {}
+              : { dueDateText: requirement.dueDateText }),
+            ...(requirement.ownerLabel === undefined
+              ? {}
+              : { ownerLabel: requirement.ownerLabel }),
+            ...(requirement.note === undefined
+              ? {}
+              : { note: requirement.note }),
+            sourceTitle: source.title,
+            sourceUrl: source.url,
+          },
+        ];
+      }),
       garden:
         garden === null
           ? null

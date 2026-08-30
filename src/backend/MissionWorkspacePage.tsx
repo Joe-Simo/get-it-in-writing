@@ -7,12 +7,16 @@ import {
   CheckCircle2,
   CircleAlert,
   ClipboardCopy,
+  ExternalLink,
+  FileCheck2,
   Globe2,
+  ListChecks,
   LoaderCircle,
   MessageSquareText,
   NotebookPen,
   Send,
   ShieldCheck,
+  UserRoundCheck,
   XCircle,
 } from "lucide-react";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -32,6 +36,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { EvidenceEdge, EvidenceNode } from "@/lib/graph-types";
 import { WorkspaceLoader } from "@/backend/WorkspaceLoader";
@@ -122,16 +133,34 @@ export default function MissionWorkspacePage() {
         >
           {data.mission.status}
         </Badge>
-        <span className="text-xs text-white/60">Bounded research</span>
+        <span className="text-xs text-white/60">Pre-bid readiness</span>
       </header>
       <main className="grid min-h-[calc(100vh-70px)] lg:grid-cols-[minmax(0,1fr)_390px]">
         <section className="flex min-h-[720px] flex-col p-4 md:p-6">
           <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <p className="eyebrow text-[#c7ff4a]">Decision evidence</p>
+              <p className="eyebrow text-[#c7ff4a]">Opportunity readiness</p>
               <h1 className="mt-3 max-w-4xl text-3xl font-semibold leading-tight tracking-[-.045em] md:text-5xl">
-                {data.mission.question}
+                {data.mission.opportunityTitle ?? data.mission.question}
               </h1>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/55">
+                {data.mission.agency && <span>{data.mission.agency}</span>}
+                {data.mission.solicitationNumber && (
+                  <span className="font-mono">
+                    {data.mission.solicitationNumber}
+                  </span>
+                )}
+                {data.mission.solicitationUrl && (
+                  <a
+                    href={data.mission.solicitationUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[#c7ff4a] hover:underline"
+                  >
+                    Open solicitation <ExternalLink className="size-3" />
+                  </a>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {(data.mission.status === "draft" ||
@@ -209,7 +238,25 @@ export default function MissionWorkspacePage() {
               </Badge>
             </div>
           )}
-          <div className="min-h-0 flex-1">
+          <OpportunityReadiness
+            missionId={id}
+            mission={data.mission}
+            requirements={data.requirements}
+            onError={setError}
+          />
+          <div className="mb-3 mt-8 flex items-end justify-between gap-4 border-t border-white/20 pt-6">
+            <div>
+              <p className="eyebrow text-[#c7ff4a]">Source proof</p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-[-.035em]">
+                Evidence map
+              </h2>
+            </div>
+            <span className="max-w-xs text-right text-xs leading-relaxed text-white/50">
+              Every extracted requirement stays linked to the source passage
+              that produced it.
+            </span>
+          </div>
+          <div className="min-h-[520px] flex-1">
             <EvidenceGraph
               nodes={nodes}
               edges={edges}
@@ -237,7 +284,7 @@ export default function MissionWorkspacePage() {
         <aside className="border-l border-white/20 bg-[#111512]">
           <ScrollArea className="h-[calc(100vh-70px)]">
             <div className="p-6">
-              <p className="eyebrow text-[#c7ff4a]">Evidence ledger</p>
+              <p className="eyebrow text-[#c7ff4a]">Source ledger</p>
               {selected && (
                 <article className="mt-6">
                   <div className="flex items-center gap-2">
@@ -338,6 +385,439 @@ export default function MissionWorkspacePage() {
         </aside>
       </main>
     </div>
+  );
+}
+
+type RequirementStatus = "open" | "satisfied" | "missing" | "not_applicable";
+type RequirementCriticality = "disqualifier" | "high" | "standard";
+type RequirementCategory =
+  | "submission"
+  | "bonding"
+  | "insurance"
+  | "eligibility"
+  | "labor"
+  | "safety"
+  | "schedule"
+  | "technical"
+  | "pricing"
+  | "other";
+
+type PrebidRequirement = {
+  _id: Id<"requirements">;
+  sourceId: Id<"sources">;
+  claimId: Id<"claims">;
+  text: string;
+  category: RequirementCategory;
+  criticality: RequirementCriticality;
+  status: RequirementStatus;
+  requiredWithBid: boolean;
+  sourceQuote: string;
+  dueDateText?: string;
+  ownerLabel?: string;
+  note?: string;
+  sourceTitle: string;
+  sourceUrl: string;
+};
+
+type PrebidMission = {
+  status: MissionStatus;
+  workflowKind?: "research" | "prebid";
+  bidDueAt?: number;
+  decision?: "undecided" | "bid" | "no_bid";
+  decisionRationale?: string;
+};
+
+function OpportunityReadiness({
+  missionId,
+  mission,
+  requirements,
+  onError,
+}: {
+  missionId: Id<"missions">;
+  mission: PrebidMission;
+  requirements: PrebidRequirement[];
+  onError: (message: string) => void;
+}) {
+  const setDecision = useMutation(api.requirements.setDecision);
+  const [currentTime] = useState(() => Date.now());
+  const [rationale, setRationale] = useState(mission.decisionRationale ?? "");
+  const [decisionPending, setDecisionPending] = useState(false);
+  const resolved = requirements.filter(
+    (requirement) =>
+      requirement.status === "satisfied" ||
+      requirement.status === "not_applicable",
+  ).length;
+  const missing = requirements.filter(
+    (requirement) => requirement.status === "missing",
+  ).length;
+  const openDisqualifiers = requirements.filter(
+    (requirement) =>
+      requirement.criticality === "disqualifier" &&
+      requirement.status !== "satisfied" &&
+      requirement.status !== "not_applicable",
+  ).length;
+  const readinessPercent =
+    requirements.length === 0
+      ? 0
+      : Math.round((resolved / requirements.length) * 100);
+  const daysRemaining =
+    mission.bidDueAt === undefined
+      ? null
+      : Math.ceil((mission.bidDueAt - currentTime) / 86_400_000);
+  const posture = requirements.some(
+    (requirement) =>
+      requirement.criticality === "disqualifier" &&
+      requirement.status === "missing",
+  )
+    ? "No-bid risk"
+    : openDisqualifiers > 0
+      ? "Hold before pricing"
+      : requirements.length > 0 && resolved === requirements.length
+        ? "Ready for human decision"
+        : "Needs solicitation evidence";
+
+  const recordDecision = (decision: "undecided" | "bid" | "no_bid") => {
+    setDecisionPending(true);
+    onError("");
+    void setDecision({
+      missionId,
+      decision,
+      rationale: rationale || undefined,
+    })
+      .catch((reason: unknown) =>
+        onError(
+          reason instanceof Error
+            ? reason.message
+            : "The decision could not be recorded",
+        ),
+      )
+      .finally(() => setDecisionPending(false));
+  };
+
+  return (
+    <section className="border border-white/20 bg-white/[.025]">
+      <div className="grid border-b border-white/20 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          [posture, "current posture"],
+          [String(readinessPercent) + "%", "requirements resolved"],
+          [String(openDisqualifiers), "open disqualifiers"],
+          [
+            daysRemaining === null
+              ? "Not set"
+              : daysRemaining < 0
+                ? `${Math.abs(daysRemaining)}d late`
+                : `${daysRemaining}d`,
+            "until bid deadline",
+          ],
+        ].map(([value, label]) => (
+          <div
+            key={label}
+            className="border-b border-r border-white/20 p-4 last:border-r-0 sm:p-5"
+          >
+            <p className="text-2xl font-semibold tracking-[-.04em]">{value}</p>
+            <p className="eyebrow mt-2 text-white/50">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_310px]">
+        <div className="p-4 sm:p-6">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <div className="flex items-center gap-2">
+                <ListChecks className="size-5 text-[#c7ff4a]" />
+                <p className="eyebrow text-[#c7ff4a]">Compliance matrix</p>
+              </div>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-.045em]">
+                What must be true before the bid goes out.
+              </h2>
+            </div>
+            <Badge
+              variant="outline"
+              className="w-fit border-white/25 bg-transparent text-white"
+            >
+              {requirements.length} sourced requirements
+            </Badge>
+          </div>
+
+          {requirements.length === 0 ? (
+            <div className="mt-6 border border-dashed border-white/25 p-6">
+              <FileCheck2 className="size-6 text-[#c7ff4a]" />
+              <p className="mt-4 font-semibold">
+                {mission.workflowKind !== "prebid"
+                  ? "This analysis predates solicitation intake."
+                  : mission.status === "draft"
+                    ? "Launch the bounded crawl to extract bid requirements."
+                    : ["crawling", "extracting", "synthesizing"].includes(
+                          mission.status,
+                        )
+                      ? "The compliance matrix is being built from the live source set."
+                      : "No explicit bid requirements were found in the authorized source set."}
+              </p>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/55">
+                A real pre-bid decision needs the solicitation or bid package
+                itself. Generic regulations can explain the rules, but they
+                cannot supply this opportunity&apos;s forms, dates, bonds, or
+                submission instructions.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-3">
+              {[...requirements]
+                .sort((left, right) => {
+                  const severity = { disqualifier: 0, high: 1, standard: 2 };
+                  return (
+                    severity[left.criticality] - severity[right.criticality]
+                  );
+                })
+                .map((requirement) => (
+                  <RequirementRow
+                    key={requirement._id}
+                    requirement={requirement}
+                    onError={onError}
+                  />
+                ))}
+            </div>
+          )}
+        </div>
+
+        <aside className="border-t border-white/20 p-5 xl:border-l xl:border-t-0">
+          <div className="flex items-center gap-2">
+            <UserRoundCheck className="size-5 text-[#c7ff4a]" />
+            <p className="eyebrow text-[#c7ff4a]">Human decision</p>
+          </div>
+          <p className="mt-4 text-sm leading-relaxed text-white/58">
+            The matrix exposes risk. A team member still owns the final pursuit
+            decision and its rationale.
+          </p>
+          <Label
+            htmlFor="decision-rationale"
+            className="mt-6 block text-white/75"
+          >
+            Decision rationale
+          </Label>
+          <Textarea
+            id="decision-rationale"
+            value={rationale}
+            onChange={(event) => setRationale(event.target.value)}
+            placeholder="Why this opportunity is or is not worth estimator time"
+            className="mt-2 min-h-28 border-white/25 bg-black/20 text-white placeholder:text-white/35"
+            maxLength={2_000}
+          />
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Button
+              variant={mission.decision === "bid" ? "default" : "outline"}
+              className={
+                mission.decision === "bid"
+                  ? "bg-[#c7ff4a] text-[#111612] hover:bg-[#d8ff82]"
+                  : "border-white/25 bg-transparent text-white hover:bg-white/10"
+              }
+              disabled={decisionPending}
+              onClick={() => recordDecision("bid")}
+            >
+              Bid
+            </Button>
+            <Button
+              variant={
+                mission.decision === "no_bid" ? "destructive" : "outline"
+              }
+              className={
+                mission.decision === "no_bid"
+                  ? "bg-[#ff6b57] text-[#111612] hover:bg-[#ff8575]"
+                  : "border-white/25 bg-transparent text-white hover:bg-white/10"
+              }
+              disabled={decisionPending}
+              onClick={() => recordDecision("no_bid")}
+            >
+              No bid
+            </Button>
+          </div>
+          {mission.decision !== undefined &&
+            mission.decision !== "undecided" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2 w-full text-white/55 hover:bg-white/10 hover:text-white"
+                disabled={decisionPending}
+                onClick={() => recordDecision("undecided")}
+              >
+                Reopen decision
+              </Button>
+            )}
+          <div className="mt-6 border-t border-white/20 pt-4">
+            <p className="eyebrow text-white/45">Current record</p>
+            <p className="mt-2 text-lg font-semibold capitalize">
+              {(mission.decision ?? "undecided").replace("_", " ")}
+            </p>
+            <p className="mt-1 text-xs text-white/45">
+              {missing} missing · {resolved} resolved · {requirements.length}{" "}
+              total
+            </p>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function RequirementRow({
+  requirement,
+  onError,
+}: {
+  requirement: PrebidRequirement;
+  onError: (message: string) => void;
+}) {
+  const updateRequirement = useMutation(api.requirements.update);
+  const [ownerLabel, setOwnerLabel] = useState(requirement.ownerLabel ?? "");
+  const [dueDateText, setDueDateText] = useState(requirement.dueDateText ?? "");
+  const [note, setNote] = useState(requirement.note ?? "");
+  const [pending, setPending] = useState(false);
+
+  const save = (changes: {
+    status?: RequirementStatus;
+    ownerLabel?: string;
+    dueDateText?: string;
+    note?: string;
+  }) => {
+    setPending(true);
+    onError("");
+    void updateRequirement({ requirementId: requirement._id, ...changes })
+      .catch((reason: unknown) =>
+        onError(
+          reason instanceof Error
+            ? reason.message
+            : "The requirement could not be updated",
+        ),
+      )
+      .finally(() => setPending(false));
+  };
+
+  return (
+    <article className="border border-white/20 bg-black/15 p-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              className={
+                requirement.criticality === "disqualifier"
+                  ? "bg-[#ff6b57] text-[#111612]"
+                  : requirement.criticality === "high"
+                    ? "bg-[#f1be55] text-[#111612]"
+                    : "bg-white/15 text-white"
+              }
+            >
+              {requirement.criticality}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="border-white/25 bg-transparent text-white/75"
+            >
+              {requirement.category}
+            </Badge>
+            {requirement.requiredWithBid && (
+              <Badge
+                variant="outline"
+                className="border-[#c7ff4a]/45 bg-transparent text-[#c7ff4a]"
+              >
+                required with bid
+              </Badge>
+            )}
+          </div>
+          <h3 className="mt-3 text-lg font-semibold leading-snug tracking-[-.02em]">
+            {requirement.text}
+          </h3>
+          <blockquote className="mt-3 border-l border-white/25 pl-3 text-xs leading-relaxed text-white/48">
+            {requirement.sourceQuote}
+          </blockquote>
+          <a
+            href={requirement.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#c7ff4a] hover:underline"
+          >
+            {requirement.sourceTitle} <ExternalLink className="size-3" />
+          </a>
+        </div>
+        <Select
+          value={requirement.status}
+          disabled={pending}
+          onValueChange={(status) =>
+            save({ status: status as RequirementStatus })
+          }
+        >
+          <SelectTrigger
+            aria-label={`Status for ${requirement.text}`}
+            className="w-full border-white/25 bg-black/20 text-white lg:w-[150px]"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="open">Open</SelectItem>
+            <SelectItem value="satisfied">Satisfied</SelectItem>
+            <SelectItem value="missing">Missing</SelectItem>
+            <SelectItem value="not_applicable">Not applicable</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="mt-4 grid gap-3 border-t border-white/15 pt-4 md:grid-cols-[1fr_1fr_1.5fr_auto]">
+        <div>
+          <Label
+            htmlFor={`owner-${requirement._id}`}
+            className="text-xs text-white/55"
+          >
+            Owner
+          </Label>
+          <Input
+            id={`owner-${requirement._id}`}
+            value={ownerLabel}
+            onChange={(event) => setOwnerLabel(event.target.value)}
+            placeholder="Unassigned"
+            className="mt-1 border-white/20 bg-black/20 text-white placeholder:text-white/30"
+            maxLength={80}
+          />
+        </div>
+        <div>
+          <Label
+            htmlFor={`due-${requirement._id}`}
+            className="text-xs text-white/55"
+          >
+            Due / timing
+          </Label>
+          <Input
+            id={`due-${requirement._id}`}
+            value={dueDateText}
+            onChange={(event) => setDueDateText(event.target.value)}
+            placeholder="Not stated"
+            className="mt-1 border-white/20 bg-black/20 text-white placeholder:text-white/30"
+            maxLength={120}
+          />
+        </div>
+        <div>
+          <Label
+            htmlFor={`note-${requirement._id}`}
+            className="text-xs text-white/55"
+          >
+            Evidence / note
+          </Label>
+          <Input
+            id={`note-${requirement._id}`}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Where the proof lives or what is missing"
+            className="mt-1 border-white/20 bg-black/20 text-white placeholder:text-white/30"
+            maxLength={1_000}
+          />
+        </div>
+        <Button
+          variant="outline"
+          className="self-end border-white/25 bg-transparent text-white hover:bg-white/10"
+          disabled={pending}
+          onClick={() => save({ ownerLabel, dueDateText, note })}
+        >
+          {pending ? <LoaderCircle className="animate-spin" /> : "Save"}
+        </Button>
+      </div>
+    </article>
   );
 }
 

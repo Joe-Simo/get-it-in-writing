@@ -43,11 +43,7 @@ export const missionWorkflow = missionWorkflowManager
           break;
         }
         if (attempt === 7) break;
-        const exponentialDelay = firecrawlRetryDelayMs(
-          429,
-          null,
-          attempt,
-        );
+        const exponentialDelay = firecrawlRetryDelayMs(429, null, attempt);
         await step.sleep(Math.max(result.retryAfterMs, exponentialDelay ?? 0));
       }
       if (!accepted) {
@@ -234,6 +230,30 @@ const extractedClaim = v.object({
     v.literal("challenges"),
     v.literal("context"),
   ),
+  requirement: v.union(
+    v.null(),
+    v.object({
+      category: v.union(
+        v.literal("submission"),
+        v.literal("bonding"),
+        v.literal("insurance"),
+        v.literal("eligibility"),
+        v.literal("labor"),
+        v.literal("safety"),
+        v.literal("schedule"),
+        v.literal("technical"),
+        v.literal("pricing"),
+        v.literal("other"),
+      ),
+      criticality: v.union(
+        v.literal("disqualifier"),
+        v.literal("high"),
+        v.literal("standard"),
+      ),
+      requiredWithBid: v.boolean(),
+      dueDateText: v.union(v.null(), v.string()),
+    }),
+  ),
 });
 
 export const storeProcessedSources = internalMutation({
@@ -272,6 +292,7 @@ export const storeProcessedSources = internalMutation({
     }
     let sourceCount = 0;
     let claimCount = 0;
+    let requirementCount = 0;
     for (const source of args.sources.slice(0, 50)) {
       const existing = await ctx.db
         .query("sources")
@@ -313,6 +334,30 @@ export const storeProcessedSources = internalMutation({
           quote: claim.quote.slice(0, 1_000),
           support: claim.support,
         });
+        if (claim.requirement !== null) {
+          await ctx.db.insert("requirements", {
+            missionId: args.missionId,
+            sourceId,
+            claimId,
+            text: claim.summary.slice(0, 500),
+            category: claim.requirement.category,
+            criticality: claim.requirement.criticality,
+            status: "open",
+            requiredWithBid: claim.requirement.requiredWithBid,
+            sourceQuote: claim.quote.slice(0, 1_000),
+            ...(claim.requirement.dueDateText === null ||
+            claim.requirement.dueDateText.trim() === ""
+              ? {}
+              : {
+                  dueDateText: claim.requirement.dueDateText
+                    .trim()
+                    .slice(0, 120),
+                }),
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+          requirementCount += 1;
+        }
         claimCount += 1;
       }
     }
@@ -336,7 +381,7 @@ export const storeProcessedSources = internalMutation({
       missionId: args.missionId,
       type: "claim",
       label: "Evidence extracted",
-      detail: `${claimCount} claims from ${sourceCount} sources`,
+      detail: `${claimCount} claims and ${requirementCount} bid requirements from ${sourceCount} sources`,
       createdAt: Date.now(),
     });
     return { accepted: true, sourceCount, claimCount };
@@ -383,6 +428,14 @@ export const getSynthesisInput = internalQuery({
     mission: v.object({
       question: v.string(),
       status: missionStatus,
+      workflowKind: v.optional(
+        v.union(v.literal("research"), v.literal("prebid")),
+      ),
+      opportunityTitle: v.optional(v.string()),
+      solicitationUrl: v.optional(v.string()),
+      solicitationNumber: v.optional(v.string()),
+      agency: v.optional(v.string()),
+      bidDueAt: v.optional(v.number()),
     }),
     seeds: v.array(
       v.object({
@@ -407,11 +460,35 @@ export const getSynthesisInput = internalQuery({
         confidence: v.number(),
       }),
     ),
+    requirements: v.array(
+      v.object({
+        text: v.string(),
+        category: v.union(
+          v.literal("submission"),
+          v.literal("bonding"),
+          v.literal("insurance"),
+          v.literal("eligibility"),
+          v.literal("labor"),
+          v.literal("safety"),
+          v.literal("schedule"),
+          v.literal("technical"),
+          v.literal("pricing"),
+          v.literal("other"),
+        ),
+        criticality: v.union(
+          v.literal("disqualifier"),
+          v.literal("high"),
+          v.literal("standard"),
+        ),
+        requiredWithBid: v.boolean(),
+        dueDateText: v.optional(v.string()),
+      }),
+    ),
   }),
   handler: async (ctx, args) => {
     const mission = await ctx.db.get("missions", args.missionId);
     if (mission === null) throw new Error("Mission not found");
-    const [seeds, claims] = await Promise.all([
+    const [seeds, claims, requirements] = await Promise.all([
       ctx.db
         .query("missionSeeds")
         .withIndex("by_missionId", (q) => q.eq("missionId", args.missionId))
@@ -420,15 +497,47 @@ export const getSynthesisInput = internalQuery({
         .query("claims")
         .withIndex("by_missionId", (q) => q.eq("missionId", args.missionId))
         .take(250),
+      ctx.db
+        .query("requirements")
+        .withIndex("by_missionId", (q) => q.eq("missionId", args.missionId))
+        .take(300),
     ]);
     return {
-      mission: { question: mission.question, status: mission.status },
+      mission: {
+        question: mission.question,
+        status: mission.status,
+        ...(mission.workflowKind === undefined
+          ? {}
+          : { workflowKind: mission.workflowKind }),
+        ...(mission.opportunityTitle === undefined
+          ? {}
+          : { opportunityTitle: mission.opportunityTitle }),
+        ...(mission.solicitationUrl === undefined
+          ? {}
+          : { solicitationUrl: mission.solicitationUrl }),
+        ...(mission.solicitationNumber === undefined
+          ? {}
+          : { solicitationNumber: mission.solicitationNumber }),
+        ...(mission.agency === undefined ? {} : { agency: mission.agency }),
+        ...(mission.bidDueAt === undefined
+          ? {}
+          : { bidDueAt: mission.bidDueAt }),
+      },
       seeds: seeds.map((seed) => ({ status: seed.status })),
       claims: claims.map((claim) => ({
         _id: claim._id,
         text: claim.text,
         status: claim.status,
         confidence: claim.confidence,
+      })),
+      requirements: requirements.map((requirement) => ({
+        text: requirement.text,
+        category: requirement.category,
+        criticality: requirement.criticality,
+        requiredWithBid: requirement.requiredWithBid,
+        ...(requirement.dueDateText === undefined
+          ? {}
+          : { dueDateText: requirement.dueDateText }),
       })),
     };
   },
@@ -527,5 +636,21 @@ export type StoredSource = {
     confidence: number;
     quote: string;
     support: "supports" | "challenges" | "context";
+    requirement: null | {
+      category:
+        | "submission"
+        | "bonding"
+        | "insurance"
+        | "eligibility"
+        | "labor"
+        | "safety"
+        | "schedule"
+        | "technical"
+        | "pricing"
+        | "other";
+      criticality: "disqualifier" | "high" | "standard";
+      requiredWithBid: boolean;
+      dueDateText: string | null;
+    };
   }>;
 };

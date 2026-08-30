@@ -20,10 +20,10 @@ export default function SignInPage() {
         <div>
           <p className="eyebrow text-[#c7ff4a]">Team access</p>
           <h1 className="mt-5 max-w-3xl text-7xl font-semibold leading-[.86] tracking-[-.065em]">
-            Open your decision workspace.
+            Open your pre-bid workspace.
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/55">
-            Private decisions, live collaborators, and review-ready briefs stay
+            Private opportunities, compliance work, and review-ready briefs stay
             scoped to your team.
           </p>
         </div>
@@ -119,4 +119,3 @@ export default function SignInPage() {
     </main>
   );
 }
-

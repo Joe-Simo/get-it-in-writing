@@ -20,6 +20,7 @@ import type * as model_auth from "../model/auth.js";
 import type * as pipeline from "../pipeline.js";
 import type * as pipelineActions from "../pipelineActions.js";
 import type * as readiness from "../readiness.js";
+import type * as requirements from "../requirements.js";
 import type * as review from "../review.js";
 import type * as teamActions from "../teamActions.js";
 import type * as teams from "../teams.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   pipeline: typeof pipeline;
   pipelineActions: typeof pipelineActions;
   readiness: typeof readiness;
+  requirements: typeof requirements;
   review: typeof review;
   teamActions: typeof teamActions;
   teams: typeof teams;

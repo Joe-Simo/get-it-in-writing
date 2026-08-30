@@ -4,12 +4,14 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
+  CalendarClock,
   Building2,
   CheckCircle2,
   CircleAlert,
   LoaderCircle,
   LogOut,
   MailCheck,
+  FileCheck2,
   Plus,
   Radar,
   Send,
@@ -182,6 +184,12 @@ function InvitationAcceptance({
 type MissionSummary = {
   _id: Id<"missions">;
   question: string;
+  workflowKind?: "research" | "prebid";
+  opportunityTitle?: string;
+  solicitationNumber?: string;
+  agency?: string;
+  bidDueAt?: number;
+  decision?: "undecided" | "bid" | "no_bid";
   status: string;
   sourceCount: number;
   claimCount: number;
@@ -251,10 +259,14 @@ function TeamDashboard({
       <main className="px-5 py-10 md:px-8 lg:px-12">
         <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div>
-            <p className="eyebrow">Decision workspace</p>
+            <p className="eyebrow">Federal construction pre-bid</p>
             <h1 className="mt-4 text-6xl font-semibold tracking-[-.065em] md:text-8xl">
-              Your decisions.
+              Protect estimator time.
             </h1>
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-black/60">
+              Turn each solicitation into a sourced compliance matrix before
+              your team commits days to pricing it.
+            </p>
           </div>
           <MissionComposer teamId={team._id} />
         </div>
@@ -278,11 +290,18 @@ function TeamDashboard({
                 </span>
               </div>
               <h2 className="mt-16 text-2xl font-semibold leading-tight tracking-[-.035em]">
-                {mission.question}
+                {mission.opportunityTitle ?? mission.question}
               </h2>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-black/60">
+                {mission.agency && <span>{mission.agency}</span>}
+                {mission.solicitationNumber && (
+                  <span>· {mission.solicitationNumber}</span>
+                )}
+              </div>
               <div className="mt-6 flex items-center justify-between text-xs text-black/60">
                 <span>
-                  {mission.sourceCount} sources · {mission.claimCount} claims
+                  {mission.sourceCount} sources · {mission.claimCount} evidence
+                  claims
                 </span>
                 <ArrowRight className="size-4 transition group-hover:translate-x-1" />
               </div>
@@ -291,9 +310,9 @@ function TeamDashboard({
           {missions?.length === 0 && (
             <div className="col-span-full bg-[#f2eee5] p-12 text-center">
               <Radar className="mx-auto size-7 text-black/60" />
-              <p className="mt-4 text-lg">No decision researched yet.</p>
+              <p className="mt-4 text-lg">No opportunity analyzed yet.</p>
               <p className="mt-1 text-sm text-black/60">
-                Start with a decision and one trusted URL.
+                Start with a public solicitation URL.
               </p>
             </div>
           )}
@@ -612,14 +631,17 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
   const createMission = useMutation(api.missions.create);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [question, setQuestion] = useState("");
-  const [seeds, setSeeds] = useState("");
-  const [pageBudget, setPageBudget] = useState(24);
+  const [opportunityTitle, setOpportunityTitle] = useState("");
+  const [solicitationUrl, setSolicitationUrl] = useState("");
+  const [solicitationNumber, setSolicitationNumber] = useState("");
+  const [agency, setAgency] = useState("");
+  const [bidDueDate, setBidDueDate] = useState("");
+  const [references, setReferences] = useState("");
+  const [pageBudget, setPageBudget] = useState(12);
   const [depth, setDepth] = useState("1");
   const [error, setError] = useState("");
   const seedCount = new Set(
-    seeds
-      .split(/\n|,/)
+    [solicitationUrl, ...references.split(/\n|,/)]
       .map((seed) => seed.trim())
       .filter(Boolean),
   ).size;
@@ -628,14 +650,18 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="lg" className="rounded-full">
-          <Plus /> Research a decision
+          <Plus /> Analyze a solicitation
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl bg-[#f2eee5]">
         <DialogHeader>
           <DialogTitle className="font-editorial text-4xl font-normal tracking-[-.04em]">
-            Set the research boundary.
+            Open a pre-bid workspace.
           </DialogTitle>
+          <DialogDescription>
+            Signal Garden will read only the public solicitation and references
+            you authorize, then extract a source-linked compliance matrix.
+          </DialogDescription>
         </DialogHeader>
         <form
           className="space-y-6"
@@ -644,8 +670,16 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
             setError("");
             void createMission({
               teamId,
-              question,
-              seeds: seeds
+              workflowKind: "prebid",
+              opportunityTitle,
+              solicitationUrl,
+              solicitationNumber: solicitationNumber || undefined,
+              agency: agency || undefined,
+              bidDueAt: bidDueDate
+                ? new Date(`${bidDueDate}T17:00:00`).getTime()
+                : undefined,
+              question: `Should we bid on ${opportunityTitle}? What requirements could make the bid nonresponsive, ineligible, or operationally unsafe?`,
+              seeds: references
                 .split(/\n|,/)
                 .map((seed) => seed.trim())
                 .filter(Boolean),
@@ -665,47 +699,96 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
               );
           }}
         >
-          <div>
-            <Label htmlFor="question">Research question</Label>
-            <Textarea
-              id="question"
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              className="mt-2 min-h-28"
-              placeholder="What decision should this research help the team make?"
-              required
-              minLength={20}
-              maxLength={500}
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Label htmlFor="opportunity-title">Opportunity</Label>
+              <Input
+                id="opportunity-title"
+                value={opportunityTitle}
+                onChange={(event) => setOpportunityTitle(event.target.value)}
+                className="mt-2 h-12"
+                placeholder="Project or opportunity name"
+                required
+                minLength={3}
+                maxLength={180}
+              />
+            </div>
+            <div>
+              <Label htmlFor="agency">Agency</Label>
+              <Input
+                id="agency"
+                value={agency}
+                onChange={(event) => setAgency(event.target.value)}
+                className="mt-2 h-11"
+                placeholder="Issuing agency"
+                maxLength={180}
+              />
+            </div>
+            <div>
+              <Label htmlFor="solicitation-number">Solicitation number</Label>
+              <Input
+                id="solicitation-number"
+                value={solicitationNumber}
+                onChange={(event) => setSolicitationNumber(event.target.value)}
+                className="mt-2 h-11 font-mono text-sm"
+                placeholder="From the notice"
+                maxLength={120}
+              />
+            </div>
+            <div>
+              <Label htmlFor="bid-due-date">Bid deadline</Label>
+              <div className="relative mt-2">
+                <CalendarClock className="pointer-events-none absolute left-3 top-3 size-4 text-black/45" />
+                <Input
+                  id="bid-due-date"
+                  type="date"
+                  value={bidDueDate}
+                  onChange={(event) => setBidDueDate(event.target.value)}
+                  className="h-11 pl-10"
+                />
+              </div>
+            </div>
           </div>
           <div>
-            <Label htmlFor="seeds">Trusted seed URLs</Label>
+            <Label htmlFor="solicitation-url">Public solicitation URL</Label>
+            <div className="relative mt-2">
+              <FileCheck2 className="pointer-events-none absolute left-3 top-3.5 size-4 text-black/45" />
+              <Input
+                id="solicitation-url"
+                type="url"
+                value={solicitationUrl}
+                onChange={(event) => setSolicitationUrl(event.target.value)}
+                className="h-12 pl-10 font-mono text-xs"
+                placeholder="https://…"
+                required
+              />
+            </div>
+            <p className="mt-2 text-xs text-black/60">
+              Use the authoritative notice, bid package, or public procurement
+              page. This becomes the primary evidence boundary.
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="references">Additional authoritative URLs</Label>
             <Textarea
-              id="seeds"
-              value={seeds}
+              id="references"
+              value={references}
               onChange={(event) => {
                 const value = event.target.value;
+                setReferences(value);
                 const nextSeedCount = new Set(
-                  value
-                    .split(/\n|,/)
+                  [solicitationUrl, ...value.split(/\n|,/)]
                     .map((seed) => seed.trim())
                     .filter(Boolean),
                 ).size;
-                setSeeds(value);
-                setPageBudget((current) =>
-                  Math.max(current, Math.min(4, nextSeedCount)),
-                );
+                setPageBudget((current) => Math.max(current, nextSeedCount));
               }}
-              className="mt-2 min-h-24 font-mono text-xs"
-              placeholder={
-                "https://docs.example.com\nhttps://research.example.org"
-              }
-              required
+              className="mt-2 min-h-20 font-mono text-xs"
+              placeholder="Optional wage determination, agency instructions, or referenced clause URL"
             />
             <p className="mt-2 text-xs text-black/60">
-              One to four URLs. Every seed receives at least one page; the
-              displayed budget is divided exactly across them. External links
-              and subdomains remain off.
+              Up to three references. External discovery stays off; the system
+              cannot quietly broaden the research scope.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2">
@@ -719,7 +802,7 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
                 min={minimumPageBudget}
                 max={50}
                 step={1}
-                onValueChange={([value = 24]) => setPageBudget(value)}
+                onValueChange={([value = 12]) => setPageBudget(value)}
                 className="mt-5"
               />
             </div>
@@ -730,9 +813,9 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">0 · seed pages only</SelectItem>
-                  <SelectItem value="1">1 · linked child pages</SelectItem>
-                  <SelectItem value="2">2 · broader exploration</SelectItem>
+                  <SelectItem value="0">0 · supplied pages only</SelectItem>
+                  <SelectItem value="1">1 · linked bid documents</SelectItem>
+                  <SelectItem value="2">2 · full public package</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -743,7 +826,7 @@ function MissionComposer({ teamId }: { teamId: Id<"teams"> }) {
             </p>
           )}
           <Button type="submit" className="w-full rounded-full">
-            Create bounded research <ArrowRight />
+            Create pre-bid workspace <ArrowRight />
           </Button>
         </form>
       </DialogContent>

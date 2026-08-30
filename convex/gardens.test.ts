@@ -9,7 +9,9 @@ const modules = import.meta.glob("./**/*.ts");
 test("public gardens expose the brief and privacy-safe sponsor proof only", async () => {
   const t = convexTest(schema, modules);
   const fixture = await t.run(async (ctx) => {
-    const userId = await ctx.db.insert("users", { email: "private@example.invalid" });
+    const userId = await ctx.db.insert("users", {
+      email: "private@example.invalid",
+    });
     const teamId = await ctx.db.insert("teams", {
       name: "Private estimating team",
       slug: "private-estimating-team",
@@ -56,6 +58,21 @@ test("public gardens expose the brief and privacy-safe sponsor proof only", asyn
       sourceId,
       quote: "Private stored quote not projected separately",
       support: "supports",
+    });
+    await ctx.db.insert("requirements", {
+      missionId,
+      sourceId,
+      claimId,
+      text: "Submit the bid guarantee with the offer",
+      category: "bonding",
+      criticality: "high",
+      status: "open",
+      requiredWithBid: true,
+      sourceQuote: "Private stored source quote",
+      ownerLabel: "Private estimator identity",
+      note: "Private readiness note",
+      createdAt: 2,
+      updatedAt: 2,
     });
     const briefId = await ctx.db.insert("briefs", {
       missionId,
@@ -120,9 +137,22 @@ test("public gardens expose the brief and privacy-safe sponsor proof only", asyn
   expect(result?.process.events).toEqual([
     { type: "email", label: "Verified email reply received" },
   ]);
+  expect(result?.requirements).toEqual([
+    expect.objectContaining({
+      text: "Submit the bid guarantee with the offer",
+      category: "bonding",
+      criticality: "high",
+      status: "open",
+      requiredWithBid: true,
+      sourceTitle: "Responsibility standards",
+    }),
+  ]);
   expect(result).not.toHaveProperty("teamId");
   expect(result).not.toHaveProperty("missionId", fixture.missionId);
   expect(JSON.stringify(result)).not.toContain("private@example.invalid");
   expect(JSON.stringify(result)).not.toContain("Private reply body");
   expect(JSON.stringify(result)).not.toContain("Private detail stays excluded");
+  expect(JSON.stringify(result)).not.toContain("Private estimator identity");
+  expect(JSON.stringify(result)).not.toContain("Private readiness note");
+  expect(JSON.stringify(result)).not.toContain("Private stored source quote");
 });

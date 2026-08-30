@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ExternalLink,
+  FileCheck2,
   LoaderCircle,
 } from "lucide-react";
 import { api } from "../../convex/_generated/api";
@@ -31,6 +32,37 @@ type PublicProcess = {
     type: "mission" | "crawl" | "source" | "claim" | "brief" | "email";
     label: string;
   }>;
+};
+
+type PublicOpportunity = {
+  title: string;
+  solicitationUrl: string;
+  solicitationNumber?: string;
+  agency?: string;
+  bidDueAt?: number;
+  decision?: "undecided" | "bid" | "no_bid";
+};
+
+type PublicRequirement = {
+  _id: string;
+  text: string;
+  category:
+    | "submission"
+    | "bonding"
+    | "insurance"
+    | "eligibility"
+    | "labor"
+    | "safety"
+    | "schedule"
+    | "technical"
+    | "pricing"
+    | "other";
+  criticality: "disqualifier" | "high" | "standard";
+  status: "open" | "satisfied" | "missing" | "not_applicable";
+  requiredWithBid: boolean;
+  dueDateText?: string;
+  sourceTitle: string;
+  sourceUrl: string;
 };
 
 export default function PublicGardenPage() {
@@ -70,6 +102,8 @@ export default function PublicGardenPage() {
   return (
     <GardenView
       question={garden.question}
+      opportunity={garden.opportunity}
+      requirements={garden.requirements}
       nodes={[...sourceNodes, ...claimNodes]}
       edges={edges}
       brief={garden.brief}
@@ -80,12 +114,16 @@ export default function PublicGardenPage() {
 
 function GardenView({
   question,
+  opportunity,
+  requirements,
   nodes,
   edges,
   brief,
   process,
 }: {
   question: string;
+  opportunity: PublicOpportunity | null;
+  requirements: PublicRequirement[];
   nodes: EvidenceNode[];
   edges: EvidenceEdge[];
   brief: PublicBrief | null;
@@ -126,10 +164,32 @@ function GardenView({
 
         <section className="mt-12 grid gap-8 lg:grid-cols-[.78fr_1.22fr] lg:gap-12">
           <div className="flex flex-col">
-            <p className="eyebrow text-[#c7ff4a]">Decision under review</p>
+            <p className="eyebrow text-[#c7ff4a]">
+              {opportunity
+                ? "Pre-bid readiness brief"
+                : "Decision under review"}
+            </p>
             <h1 className="mt-5 text-5xl font-semibold leading-[.92] tracking-[-.055em] md:text-7xl">
-              {question}
+              {opportunity?.title ?? question}
             </h1>
+            {opportunity && (
+              <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm text-white/55">
+                {opportunity.agency && <span>{opportunity.agency}</span>}
+                {opportunity.solicitationNumber && (
+                  <span className="font-mono">
+                    {opportunity.solicitationNumber}
+                  </span>
+                )}
+                <a
+                  href={opportunity.solicitationUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[#c7ff4a] hover:underline"
+                >
+                  Original solicitation <ExternalLink className="size-3.5" />
+                </a>
+              </div>
+            )}
             {displayBrief && (
               <div className="mt-8 border-l border-[#c7ff4a] pl-5">
                 <p className="eyebrow text-white/60">Recommendation</p>
@@ -213,11 +273,154 @@ function GardenView({
         </section>
       </div>
 
+      {requirements.length > 0 && (
+        <PublicComplianceMatrix
+          opportunity={opportunity}
+          requirements={requirements}
+        />
+      )}
       {displayBrief && (
         <DecisionBrief brief={displayBrief} nodes={nodes} edges={edges} />
       )}
       <ProcessProof process={process} />
     </main>
+  );
+}
+
+function PublicComplianceMatrix({
+  opportunity,
+  requirements,
+}: {
+  opportunity: PublicOpportunity | null;
+  requirements: PublicRequirement[];
+}) {
+  const resolved = requirements.filter(
+    (requirement) =>
+      requirement.status === "satisfied" ||
+      requirement.status === "not_applicable",
+  ).length;
+  const requiredWithBid = requirements.filter(
+    (requirement) => requirement.requiredWithBid,
+  ).length;
+  const openHighImpact = requirements.filter(
+    (requirement) =>
+      requirement.status === "open" &&
+      (requirement.criticality === "disqualifier" ||
+        requirement.criticality === "high"),
+  ).length;
+
+  return (
+    <section className="bg-[#f2eee5] px-5 py-20 text-[#111612] md:px-8 lg:px-12 lg:py-28">
+      <div className="mx-auto max-w-[1400px]">
+        <div className="grid gap-10 lg:grid-cols-[.62fr_1.38fr]">
+          <div>
+            <p className="eyebrow text-[#4d6b31]">Public compliance matrix</p>
+            <h2 className="mt-5 text-5xl font-semibold leading-[.92] tracking-[-.055em] md:text-7xl">
+              The requirements that decide whether pricing starts.
+            </h2>
+            <p className="mt-6 max-w-lg text-base leading-relaxed text-black/62">
+              These items were extracted from the published solicitation. Team
+              notes and identities stay private; the source-linked requirement
+              record is safe to review and challenge.
+            </p>
+            <dl className="mt-8 grid grid-cols-3 border-l border-t border-black/20">
+              {[
+                [requirements.length, "requirements"],
+                [requiredWithBid, "with the bid"],
+                [openHighImpact, "open high impact"],
+              ].map(([value, label]) => (
+                <div
+                  key={label}
+                  className="border-b border-r border-black/20 p-4"
+                >
+                  <dd className="text-3xl font-semibold tracking-[-.05em]">
+                    {value}
+                  </dd>
+                  <dt className="eyebrow mt-2 text-black/55">{label}</dt>
+                </div>
+              ))}
+            </dl>
+            {opportunity?.bidDueAt !== undefined && (
+              <div className="mt-6 border-l-2 border-[#4d6b31] pl-4">
+                <p className="eyebrow text-black/48">Offer deadline</p>
+                <p className="mt-2 text-xl font-semibold">
+                  {new Intl.DateTimeFormat("en-US", {
+                    dateStyle: "long",
+                    timeStyle: "short",
+                    timeZone: "America/New_York",
+                  }).format(opportunity.bidDueAt)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <ol className="border-t border-black/20">
+            {[...requirements]
+              .sort((left, right) => {
+                const severity = { disqualifier: 0, high: 1, standard: 2 };
+                return severity[left.criticality] - severity[right.criticality];
+              })
+              .map((requirement, index) => (
+                <li
+                  key={requirement._id}
+                  className="grid gap-4 border-b border-black/20 py-5 md:grid-cols-[42px_minmax(0,1fr)_150px]"
+                >
+                  <span className="font-mono text-xs font-semibold text-[#4d6b31]">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-1 text-[9px] font-semibold uppercase tracking-[.14em] ${
+                          requirement.criticality === "disqualifier"
+                            ? "bg-[#ff6b57]"
+                            : requirement.criticality === "high"
+                              ? "bg-[#e9b94f]"
+                              : "bg-black/10"
+                        }`}
+                      >
+                        {requirement.criticality}
+                      </span>
+                      <span className="text-[10px] font-semibold uppercase tracking-[.12em] text-black/48">
+                        {requirement.category}
+                      </span>
+                      {requirement.requiredWithBid && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[.12em] text-[#4d6b31]">
+                          <FileCheck2 className="size-3" /> with bid
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="mt-3 text-lg font-semibold tracking-[-.02em]">
+                      {requirement.text}
+                    </h3>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-black/55">
+                      {requirement.dueDateText && (
+                        <span>Due: {requirement.dueDateText}</span>
+                      )}
+                      <a
+                        href={requirement.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[#4d6b31] hover:underline"
+                      >
+                        Source <ExternalLink className="size-3" />
+                      </a>
+                    </div>
+                  </div>
+                  <div className="md:text-right">
+                    <span className="inline-flex rounded-full border border-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[.12em]">
+                      {requirement.status.replace("_", " ")}
+                    </span>
+                  </div>
+                </li>
+              ))}
+          </ol>
+        </div>
+        <p className="mt-6 text-right text-xs text-black/45">
+          {resolved} of {requirements.length} requirements resolved by the team
+        </p>
+      </div>
+    </section>
   );
 }
 
