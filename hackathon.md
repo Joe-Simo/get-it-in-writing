@@ -2,17 +2,17 @@
 
 - **Project:** Signal Garden
 - **Event:** Convex All Gas Hackathon
-- **What it does:** Tests a business's lead form every day and emails the owner with evidence when the page, submission, or confirmation fails.
+- **What it does:** Submits one approved website lead form every day and emails the owner if the page, submission, or expected confirmation fails.
 - **Live app:** https://resilient-salamander-937.convex.site
 - **Repo:** https://github.com/Joe-Simo/signal-garden-all-gas
 - **Frontend:** Convex static hosting
 - **Convex deployment:** https://resilient-salamander-937.convex.cloud
-- **Components:** @convex-dev/static-hosting, @convex-dev/workflow
+- **Components:** @convex-dev/static-hosting
 - **Convex features:** schema, tables, indexes, realtime queries, mutations, actions, HTTP actions, crons, scheduled functions
 - **Auth:** Convex Auth
-- **AI models:** gpt-5.6-luna, gpt-5.6-terra
+- **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T16:09:16Z
+- **Last updated:** 2026-08-30T17:00:20Z
 
 ## Log
 
@@ -87,3 +87,21 @@ and proof pages at desktop and mobile sizes.
 
 Public journey proof:
 https://resilient-salamander-937.convex.site/proof/setup-request-to-confirmation-cd8df1tc
+
+### 2026-08-30 - d9518cc
+
+Finished the one-site private beta as a focused lead-form monitor: one approved
+form, one real submission per day, and an owner email only when a customer-facing
+step actually fails. Emailed setup links are now expiring, recipient-bound, and
+carry the verified website into onboarding.
+
+Separated safety stops from failures, paused forms that need owner review, made
+alert retries and result recording idempotent, and prevented one confirmation
+message from satisfying multiple checks. Retired the earlier research and bid
+product from the UI, routes, functions, crons, schema, components, dependencies,
+and tests.
+
+Deployed only `joe-simo/signal-garden-all-gas` to its dedicated development and
+production deployments. Verified a real AgentMail setup delivery, the live app
+and public check, strict lint, 21 focused tests, the production build, and nine
+desktop/mobile Playwright journeys with Axe and keyboard coverage.
