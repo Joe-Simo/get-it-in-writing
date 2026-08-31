@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-31T00:08:09Z
+- **Last updated:** 2026-08-31T00:23:19Z
 
 ## Log
 
@@ -245,3 +245,16 @@ new late-event and reply-retry regression coverage, the production build, and
 23 desktop/mobile browser journeys, then deployed only
 `joe-simo/signal-garden-all-gas` and confirmed the live site serves the new
 assets with no console errors.
+
+### 2026-08-31 - 6027c7c
+
+Closed the last missing account journey: password reset. The sign-in page can
+now email an 8-digit one-time code through the app's own AgentMail inbox; the
+code is bound to the account email, expires after 15 minutes, and setting the
+new password signs the owner straight back into their wallet
+(`convex/authReset.ts`, `convex/auth.ts`, `src/backend/SignInPage.tsx`).
+Clarified the account-creation error when an email already has a wallet.
+
+Verified strict lint and type checking, 30 tests, and the production build,
+deployed only `joe-simo/signal-garden-all-gas`, and confirmed one real reset
+code delivered through AgentMail on the live deployment.
