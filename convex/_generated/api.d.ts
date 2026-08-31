@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as authReset from "../authReset.js";
 import type * as changes from "../changes.js";
 import type * as confirmationOpenAI from "../confirmationOpenAI.js";
 import type * as confirmations from "../confirmations.js";
@@ -31,6 +32,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  authReset: typeof authReset;
   changes: typeof changes;
   confirmationOpenAI: typeof confirmationOpenAI;
   confirmations: typeof confirmations;

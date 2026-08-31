@@ -834,6 +834,27 @@ export const storeReplyInterpretation = internalMutation({
   },
 });
 
+export const sendPasswordResetCode = internalMutation({
+  args: { email: v.string(), code: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const inboxId = process.env.AGENTMAIL_INBOX_ID;
+    if (!inboxId) throw new Error("AgentMail is not configured for this deployment");
+    await agentmail.sendMessage(ctx, inboxId, {
+      to: args.email,
+      subject: "Your Get It in Writing password reset code",
+      text: [
+        `Your reset code is ${args.code}. It expires in 15 minutes.`,
+        "",
+        "Enter it on the sign-in page together with your new password.",
+        "If you did not request this, ignore this message — your wallet stays unchanged.",
+      ].join("\n"),
+      labels: ["get-it-in-writing", "password-reset"],
+    });
+    return null;
+  },
+});
+
 export const retryReplyInterpretation = mutation({
   args: { decisionId: v.id("decisions") },
   returns: v.null(),

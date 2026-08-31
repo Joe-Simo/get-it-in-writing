@@ -36,7 +36,8 @@ the owner’s approval.
 - Firecrawl performs bounded research on the submitted official domain.
 - OpenAI produces structured assessments that are checked against the captured
   source text before supportive claims are stored.
-- AgentMail sends the owner-approved message. Convex correlates real replies by
+- AgentMail sends the owner-approved message and account password-reset codes.
+  Convex correlates real replies by
   provider thread and a unique request token, deduplicates them, and interprets
   them requirement by requirement. An inbox-scoped AgentMail webhook delivers
   events to an authenticated Convex HTTP action, which records the event before
