@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-31T01:20:22Z
+- **Last updated:** 2026-08-31T02:10:11Z
 
 ## Log
 
@@ -274,3 +274,24 @@ Verified strict lint and type checking, 31 tests including per-account
 metering coverage, the production build, and 23 desktop/mobile browser
 journeys with Axe (which caught and forced a contrast fix on the new example
 control), then deployed only `joe-simo/get-it-in-writing`.
+
+### 2026-08-31 - b2c593d
+
+Turned the landing hero into an ink stage built on vgpu compute passes: a
+pressure-projected flow field carries a monochrome wash that is emitted from
+the rasterized headline word "probably." itself, drifts with buoyancy and a
+slow breeze, smears under the pointer, and always settles — the tagline
+performing the product's thesis. The wash composites as watercolor over the
+page with granulation and a hard alpha cap so text contrast always holds;
+reduced motion, forced colors, and missing WebGPU fall back to the static
+seal (`src/visual/ink/`, `src/marketing/LandingPage.tsx`).
+
+Opened a shared read-only demo wallet for judging. Its published credentials
+can browse everything and change nothing — every mutating function refuses
+the account with clear copy — and its cases are seeded through the genuine
+scope, crawl, and analysis pipeline rather than authored rows
+(`convex/demo.ts`, `convex/model/auth.ts`).
+
+Verified strict lint and type checking, 32 tests, the production build, and
+23 desktop/mobile browser journeys including the new ink-stage fallback
+contract, then deployed only `joe-simo/get-it-in-writing`.
