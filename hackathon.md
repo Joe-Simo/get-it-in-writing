@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-31T15:30:13Z
+- **Last updated:** 2026-08-31T16:36:15Z
 
 ## Log
 
@@ -313,3 +313,20 @@ a webhook payload is entirely textless, hydrates the stored thread over the
 AgentMail API before interpretation (`convex/confirmations.ts`,
 `convex/demo.ts`). Verified strict lint and type checking, 34 tests including
 HTML-reply regression coverage, and deployed only `joe-simo/get-it-in-writing`.
+
+### 2026-08-31 - c3e943d
+
+Closed public sign-ups for the judged beta. Account creation is refused at the
+server with clear copy, and the landing card became a rate-limited waitlist
+whose joins are idempotent per address. The shared demo wallet is now the only
+live-access path: it can create decisions and watch the genuine research
+pipeline inside the shared budgets, while sending, editing, and deleting stay
+with the owner (`convex/auth.ts`, `convex/waitlist.ts`, `convex/limits.ts`,
+`src/marketing/LandingPage.tsx`, `src/backend/SignInPage.tsx`).
+
+Verified strict lint and type checking, 17 test files' worth of unit and
+integration coverage including waitlist idempotence and the demo wallet's
+explore-but-never-send contract, the production build, and 20 browser
+journeys re-written to ride the demo wallet, then deployed only
+`joe-simo/get-it-in-writing` and confirmed at runtime that sign-up is
+refused, the waitlist accepts, and the demo wallet still signs in.
