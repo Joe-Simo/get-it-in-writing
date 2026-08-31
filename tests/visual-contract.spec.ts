@@ -58,8 +58,7 @@ test("forced colors and a 200-percent-equivalent viewport keep the task usable",
   }));
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth);
   await expect(stage).toHaveCSS("display", "none");
-  await expect(page.getByLabel("Official page")).toBeVisible();
-  await expect(page.getByLabel("What must be true?")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Check before I rely on it" })).toBeEnabled();
+  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Join the waitlist" })).toBeEnabled();
   await page.screenshot({ path: "artifacts/qa/landing-forced-colors-zoom.png" });
 });

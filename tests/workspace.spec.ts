@@ -8,27 +8,19 @@ test("the private wallet starts empty and exposes the real decision intake", asy
     !["desktop", "mobile-390"].includes(testInfo.project.name),
     "The authenticated journey runs once per desktop and phone layout",
   );
-  const runId = `${Date.now()}-${testInfo.workerIndex}-${testInfo.project.name}`;
-
+  // Sign-ups are closed; the authenticated journey rides the demo wallet.
   await page.goto("/app", { waitUntil: "domcontentloaded" });
-  await page
-    .getByRole("button", { name: "New here? Create an account" })
-    .click();
-  await page.getByLabel("Email").fill(`giw-qa-${runId}@example.invalid`);
-  await page.getByLabel("Password").fill(`Local-QA-${runId}-Pass!`);
-  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByLabel("Email").fill("judge@getitinwriting.demo");
+  await page.getByLabel("Password").fill("dont-rely-on-probably");
+  await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(
     page.getByRole("heading", {
       name: /your decisions.*with the uncertainty removed/i,
     }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Nothing here yet." }),
-  ).toBeVisible();
-  await expect(page.getByText("Only you can see this wallet.")).toBeVisible();
 
-  await page.getByRole("link", { name: "Protect a decision" }).click();
+  await page.getByRole("link", { name: "New decision" }).first().click();
   await expect(
     page.getByRole("heading", { name: /what are you about.*to rely on/i }),
   ).toBeVisible();

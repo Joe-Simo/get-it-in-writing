@@ -25,6 +25,7 @@ import type * as model_auth from "../model/auth.js";
 import type * as readiness from "../readiness.js";
 import type * as research from "../research.js";
 import type * as researchOpenAI from "../researchOpenAI.js";
+import type * as waitlist from "../waitlist.js";
 
 import type {
   ApiFromModules,
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   readiness: typeof readiness;
   research: typeof research;
   researchOpenAI: typeof researchOpenAI;
+  waitlist: typeof waitlist;
 }>;
 
 /**

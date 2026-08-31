@@ -8,8 +8,10 @@ test("the landing page makes the decision-protection outcome immediately clear",
   await expect(
     page.getByRole("heading", { level: 1, name: /don’t rely on.*probably/i }),
   ).toBeVisible();
-  await expect(page.getByLabel("Official page")).toBeVisible();
-  await expect(page.getByLabel("What must be true?")).toBeVisible();
+  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Join the waitlist" }),
+  ).toBeVisible();
   await expect(
     page.getByText(/nothing is sent without your approval/i),
   ).toBeVisible();
@@ -38,34 +40,28 @@ test("the public story describes the customer boundary rather than the stack", a
   );
 });
 
-test("the primary action preserves the draft and reaches private sign in", async ({
+test("joining the waitlist confirms without leaving the page", async ({
   page,
-}) => {
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "One live join per run keeps the list clean");
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Official page").fill("https://example.com/rooms");
   await page
-    .getByLabel("What must be true?")
-    .fill("We need connecting rooms, not merely adjacent rooms.");
-  await page.getByRole("button", { name: "Check before I rely on it" }).click();
-
-  await expect(page).toHaveURL(/\/app\/new$/);
-  await expect(
-    page.getByRole("heading", { name: "Open your decisions." }),
-  ).toBeVisible();
+    .getByLabel("Email")
+    .fill(`giw-waitlist-qa-${Date.now()}@example.invalid`);
+  await page.getByRole("button", { name: "Join the waitlist" }).click();
+  await expect(page.getByText("You’re on the list.")).toBeVisible();
+  await expect(page.getByText(/when your first case is ready/i)).toBeVisible();
 });
 
-test("the decision intake remains usable at every required viewport", async ({
+test("the waitlist card remains usable at every required viewport", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByLabel("Official page")).toBeInViewport();
-  await page.getByLabel("Official page").fill("https://example.com/product");
-  await page
-    .getByLabel("What must be true?")
-    .fill("The product must include a two-year written warranty.");
+  await expect(page.getByLabel("Email")).toBeInViewport();
+  await page.getByLabel("Email").fill("viewport-check@example.invalid");
   await expect(
-    page.getByRole("button", { name: "Check before I rely on it" }),
+    page.getByRole("button", { name: "Join the waitlist" }),
   ).toBeEnabled();
   const layout = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,

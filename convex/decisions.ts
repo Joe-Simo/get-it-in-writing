@@ -353,7 +353,9 @@ export const create = mutation({
   },
   returns: v.id("decisions"),
   handler: async (ctx, args) => {
-    const ownerId = await requireInteractiveUser(ctx);
+    // The demo wallet may create decisions and watch real research (bounded by
+    // the shared budgets); only sending, editing, and deleting are owner-only.
+    const ownerId = await requireUserId(ctx);
     await enforceResearchLimit(ctx, ownerId);
     const sourceUrl = normalizeOfficialUrl(args.sourceUrl);
     const requirementText = normalizeRequirement(args.requirementText);
@@ -504,7 +506,10 @@ export const retryResearch = mutation({
   args: { decisionId: v.id("decisions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const decision = await requireOwnedDecision(ctx, args.decisionId);
+    const ownerId = await requireUserId(ctx);
+    const decision = await ctx.db.get("decisions", args.decisionId);
+    if (decision === null) throw new ConvexError("This decision could not be found.");
+    if (decision.ownerId !== ownerId) throw new ConvexError("This decision is private to its owner.");
     // A hard crash inside a pipeline action (timeout, out of memory) never
     // records an operational failure, so a long-stalled in-flight status also
     // unlocks this retry.

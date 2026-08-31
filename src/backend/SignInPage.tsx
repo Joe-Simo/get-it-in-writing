@@ -9,13 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { errorText } from "@/lib/utils";
 
-type AuthFlow = "signIn" | "signUp" | "reset" | "reset-verification";
+type AuthFlow = "signIn" | "reset" | "reset-verification";
 
 const fallbackErrors: Record<AuthFlow, string> = {
   signIn:
     "That email and password combination was not accepted. Check both and try again.",
-  signUp:
-    "The account could not be created. If this email already has a wallet, choose “Already have an account? Sign in” below; otherwise use a valid email and a password of at least 8 characters.",
   reset:
     "A reset code could not be sent. Check the email address and try again.",
   "reset-verification":
@@ -63,11 +61,9 @@ export default function SignInPage() {
   const heading =
     flow === "signIn"
       ? { label: "Welcome back", title: "Open your decisions." }
-      : flow === "signUp"
-        ? { label: "Create your private wallet", title: "Start protecting decisions." }
-        : flow === "reset"
-          ? { label: "Reset your password", title: "Get back into your wallet." }
-          : { label: "Check your email", title: "Enter your reset code." };
+      : flow === "reset"
+        ? { label: "Reset your password", title: "Get back into your wallet." }
+        : { label: "Check your email", title: "Enter your reset code." };
 
   return (
     <main className="auth-layout">
@@ -102,7 +98,7 @@ export default function SignInPage() {
               <>
                 <div><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" required autoComplete="email" className="mt-2 h-12" /></div>
                 {flow !== "reset" && (
-                  <div><Label htmlFor="password">Password</Label><Input id="password" name="password" type="password" minLength={8} required autoComplete={flow === "signIn" ? "current-password" : "new-password"} className="mt-2 h-12" /></div>
+                  <div><Label htmlFor="password">Password</Label><Input id="password" name="password" type="password" minLength={8} required autoComplete="current-password" className="mt-2 h-12" /></div>
                 )}
               </>
             )}
@@ -113,11 +109,9 @@ export default function SignInPage() {
             {pending && <LoaderCircle className="animate-spin" />}
             {flow === "signIn"
               ? "Sign in"
-              : flow === "signUp"
-                ? "Create account"
-                : flow === "reset"
-                  ? "Email me a reset code"
-                  : "Set new password"}
+              : flow === "reset"
+                ? "Email me a reset code"
+                : "Set new password"}
           </Button>
           {flow === "signIn" && (
             <button type="button" className="mt-5 w-full text-sm text-ink/60 hover:text-ink" onClick={() => switchFlow("reset")}>Forgot your password?</button>
@@ -125,13 +119,19 @@ export default function SignInPage() {
           {flow === "reset-verification" && (
             <button type="button" className="mt-5 w-full text-sm text-ink/60 hover:text-ink" onClick={() => switchFlow("reset")}>Didn’t get a code? Send a new one</button>
           )}
-          <button
-            type="button"
-            className="mt-3 w-full text-sm text-ink/60 hover:text-ink"
-            onClick={() => switchFlow(flow === "signIn" ? "signUp" : "signIn")}
-          >
-            {flow === "signIn" ? "New here? Create an account" : "Already have an account? Sign in"}
-          </button>
+          {flow === "signIn" ? (
+            <p className="mt-4 text-center text-sm text-ink/60">
+              Sign-ups are closed during judging — join the waitlist on the home page.
+            </p>
+          ) : (
+            <button
+              type="button"
+              className="mt-3 w-full text-sm text-ink/60 hover:text-ink"
+              onClick={() => switchFlow("signIn")}
+            >
+              Back to sign in
+            </button>
+          )}
         </form>
       </section>
     </main>

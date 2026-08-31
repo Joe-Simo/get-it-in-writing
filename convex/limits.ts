@@ -14,6 +14,7 @@ const limiter = new RateLimiter(components.rateLimiter, {
   sendGlobal: { kind: "fixed window", rate: 25, period: DAY },
   resetCodePerEmail: { kind: "token bucket", rate: 3, period: HOUR, capacity: 3 },
   resetCodeGlobal: { kind: "fixed window", rate: 30, period: DAY },
+  waitlistGlobal: { kind: "fixed window", rate: 300, period: DAY },
 });
 
 type LimitName =
@@ -22,7 +23,8 @@ type LimitName =
   | "sendPerUser"
   | "sendGlobal"
   | "resetCodePerEmail"
-  | "resetCodeGlobal";
+  | "resetCodeGlobal"
+  | "waitlistGlobal";
 
 function waitText(retryAfter: number | undefined) {
   const minutes = Math.max(1, Math.ceil((retryAfter ?? 60_000) / 60_000));
@@ -65,5 +67,11 @@ export async function enforceResetCodeLimit(ctx: MutationCtx, email: string) {
   );
   await enforce(ctx, "resetCodeGlobal", undefined, (wait) =>
     `Password resets are briefly paused on this shared beta. Try again in ${wait}.`,
+  );
+}
+
+export async function enforceWaitlistLimit(ctx: MutationCtx) {
+  await enforce(ctx, "waitlistGlobal", undefined, (wait) =>
+    `The waitlist is briefly paused. Try again in ${wait}.`,
   );
 }

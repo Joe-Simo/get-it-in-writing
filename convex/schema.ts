@@ -61,6 +61,10 @@ export default defineSchema({
     status: v.union(v.literal("accepted"), v.literal("rejected")),
     receivedAt: v.number(),
   }).index("by_provider_and_deliveryId", ["provider", "deliveryId"]),
+  waitlist: defineTable({
+    email: v.string(),
+    createdAt: v.number(),
+  }).index("by_email", ["email"]),
   decisions: defineTable({
     ownerId: v.id("users"),
     title: v.string(),

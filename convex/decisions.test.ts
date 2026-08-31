@@ -1187,21 +1187,26 @@ test("research runs are metered per account on the shared beta", async () => {
   ).rejects.toThrow("Try again in");
 });
 
-test("the shared demo wallet is read-only and seeded only by the real pipeline", async () => {
+test("the demo wallet can explore and research but never send, edit, or delete", async () => {
   const { t } = await createUserFixture();
   const demoId = await t.run((ctx) =>
     ctx.db.insert("users", { email: "judge@getitinwriting.demo" }),
   );
 
-  await expect(
-    t.withIdentity({ subject: demoId }).mutation(api.decisions.create, {
+  // Judges may run bounded live research from the shared wallet.
+  const createdId = await t
+    .withIdentity({ subject: demoId })
+    .mutation(api.decisions.create, {
       sourceUrl: "https://www.example.com/stay",
       requirementText: "Free cancellation until 48 hours before arrival.",
-    }),
-  ).rejects.toThrow("read-only");
+    });
+  const created = await t
+    .withIdentity({ subject: demoId })
+    .query(api.decisions.getDetail, { decisionId: createdId });
+  expect(created?.decision.status).toBe("scoping");
 
   const seededId = await t.mutation(internal.demo.seedDecision, {
-    sourceUrl: "https://www.example.com/stay",
+    sourceUrl: "https://www.example.com/other-stay",
     requirementText: "Free cancellation until 48 hours before arrival.",
   });
   const seeded = await t
@@ -1213,7 +1218,16 @@ test("the shared demo wallet is read-only and seeded only by the real pipeline",
     t.withIdentity({ subject: demoId }).mutation(api.decisions.remove, {
       decisionId: seededId,
     }),
-  ).rejects.toThrow("read-only");
+  ).rejects.toThrow("demo wallet");
+});
+
+test("the waitlist accepts an address once and stays calm on repeats", async () => {
+  const { t } = await createUserFixture();
+  await t.mutation(api.waitlist.join, { email: "Future.User@Example.com " });
+  await t.mutation(api.waitlist.join, { email: "future.user@example.com" });
+  const rows = await t.run((ctx) => ctx.db.query("waitlist").collect());
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.email).toBe("future.user@example.com");
 });
 
 test("an HTML-only reply is converted to readable text before interpretation", async () => {

@@ -1,45 +1,48 @@
 import { useRef, useState, type FormEvent } from "react";
+import { useMutation } from "convex/react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   ArrowRight,
   Check,
+  CircleCheck,
   FileCheck2,
-  Link2,
+  LoaderCircle,
   LockKeyhole,
   MailQuestion,
   ShieldCheck,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { api } from "../../convex/_generated/api";
 import { Brand } from "@/components/Brand";
 import { InkStage } from "@/visual/ink/InkStage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { workedExample } from "@/lib/workedExample";
+import { errorText } from "@/lib/utils";
 
 const decisionTypes = ["Hotel", "Apartment", "Venue", "Product", "Contractor", "Storage", "Rental"];
 
 
 export default function LandingPage() {
-  const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
   const heroRef = useRef<HTMLElement>(null);
   const probablyRef = useRef<HTMLElement>(null);
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [requirementText, setRequirementText] = useState("");
+  const joinWaitlist = useMutation(api.waitlist.join);
+  const [email, setEmail] = useState("");
+  const [joined, setJoined] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
 
   function begin(event: FormEvent) {
     event.preventDefault();
-    try {
-      sessionStorage.setItem(
-        "giw:draft",
-        JSON.stringify({ sourceUrl: sourceUrl.trim(), requirementText: requirementText.trim() }),
-      );
-    } catch {
-      // Storage can be blocked; continue without carrying the draft over.
-    }
-    void navigate("/app/new");
+    setPending(true);
+    setError("");
+    void joinWaitlist({ email })
+      .then(() => setJoined(true))
+      .catch((reason: unknown) =>
+        setError(errorText(reason, "That did not go through. Check the address and try again.")),
+      )
+      .finally(() => setPending(false));
   }
 
   return (
@@ -81,56 +84,43 @@ export default function LandingPage() {
             animate={{ y: 0, rotate: 0 }}
             transition={{ duration: 0.7, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="ticket-number"><span>01</span><span>START A DECISION</span></div>
-            <div className="space-y-6">
-              <div>
-                <Label htmlFor="source-url">Official page</Label>
-                <p className="field-help">Paste the page you’re about to rely on.</p>
-                <div className="input-with-icon">
-                  <Link2 aria-hidden="true" />
+            <div className="ticket-number"><span>01</span><span>PRIVATE BETA</span></div>
+            {joined ? (
+              <div className="waitlist-joined" role="status">
+                <CircleCheck aria-hidden="true" />
+                <h2>You’re on the list.</h2>
+                <p>We’ll write to you when your first case is ready to run — and only then.</p>
+              </div>
+            ) : (
+              <div className="mt-6 space-y-6">
+                <div>
+                  <Label htmlFor="waitlist-email">Email</Label>
+                  <p className="field-help">
+                    Get It in Writing is in a private, judged beta. Leave your email and your
+                    first case is on us when the doors open.
+                  </p>
                   <Input
-                    id="source-url"
-                    type="url"
+                    id="waitlist-email"
+                    type="email"
                     required
-                    value={sourceUrl}
-                    onChange={(event) => setSourceUrl(event.target.value)}
-                    placeholder="https://official-site.com/page"
-                    autoComplete="url"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    className="mt-2 h-12"
                   />
                 </div>
+                {error && <p role="alert" className="form-error">{error}</p>}
+                <Button type="submit" disabled={pending} className="h-13 w-full rounded-none bg-cobalt text-white hover:bg-[#153ae8]">
+                  {pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
+                  Join the waitlist <ArrowRight aria-hidden="true" />
+                </Button>
+                <p className="field-help">Judging the hackathon? Sign in with the demo wallet from the submission notes.</p>
               </div>
-              <div>
-                <Label htmlFor="requirement">What must be true?</Label>
-                <p className="field-help">Tell us everything that would change your decision.</p>
-                <Textarea
-                  id="requirement"
-                  required
-                  minLength={12}
-                  maxLength={800}
-                  value={requirementText}
-                  onChange={(event) => setRequirementText(event.target.value)}
-                  placeholder="We need connecting rooms, free cancellation until 48 hours before arrival, and no resort fee."
-                  rows={4}
-                />
-                <span className="character-count">{requirementText.length}/800</span>
-              </div>
-            </div>
-            <Button type="submit" className="mt-8 h-13 w-full rounded-none bg-cobalt text-white hover:bg-[#153ae8]">
-              Check before I rely on it <ArrowRight aria-hidden="true" />
-            </Button>
-            <button
-              type="button"
-              className="worked-example-fill"
-              onClick={() => {
-                setSourceUrl(workedExample.sourceUrl);
-                setRequirementText(workedExample.requirementText);
-              }}
-            >
-              No page handy? Fill a worked example — a real hotel and a real “must be true.”
-            </button>
+            )}
             <div className="intake-assurance">
               <LockKeyhole aria-hidden="true" />
-              <span>Private by default. Nothing is sent without your approval.</span>
+              <span>Private by default. Nothing is sent without your approval — the waitlist uses your email once, to invite you.</span>
             </div>
           </motion.form>
         </section>

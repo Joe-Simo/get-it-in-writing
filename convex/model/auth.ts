@@ -15,15 +15,15 @@ export async function requireUserId(ctx: ReadCtx): Promise<Id<"users">> {
   return userId;
 }
 
-// For mutations: the demo wallet is a showcase, not a sandbox — its published
-// credentials must never let a visitor send email, delete cases, or spend the
-// shared research budget.
+// For owner-only mutations: the demo wallet's published credentials may
+// explore and run bounded research, but must never send email, edit drafts,
+// or delete cases.
 export async function requireInteractiveUser(ctx: ReadCtx): Promise<Id<"users">> {
   const userId = await requireUserId(ctx);
   const user = await ctx.db.get("users", userId);
   if (user?.email === DEMO_WALLET_EMAIL) {
     throw new ConvexError(
-      "This shared demo wallet is read-only. Create your own free account to run a live decision.",
+      "The shared demo wallet can explore cases and run research, but sending, editing, and deleting stay with the wallet's owner.",
     );
   }
   return userId;
