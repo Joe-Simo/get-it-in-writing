@@ -24,6 +24,14 @@ export const metadata: Metadata = {
     description:
       "Turn official information and your real requirements into a private reliance map and scoped Proof Card.",
     type: "website",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Get It in Writing — Don’t rely on “probably.”" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Get It in Writing — Don’t rely on probably",
+    description:
+      "See what the official page actually promises—and get the important gap confirmed in writing.",
+    images: ["/og.png"],
   },
 };
 

@@ -878,7 +878,7 @@
   align-items: center;
   border: 1px solid currentColor;
   border-radius: 999px;
-  font-size: 0.61rem;
+  font-size: 0.66rem;
   font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1151,7 +1151,7 @@
   place-items: center;
   border: 1px solid currentColor;
   border-radius: 50%;
-  font-size: 0.58rem;
+  font-size: 0.66rem;
 }
 .status-rail li > span svg {
   width: 0.75rem;
@@ -1407,7 +1407,7 @@
 .source-register small {
   margin-top: 0.35rem;
   color: rgb(16 21 17 / 48%);
-  font: 0.58rem/1.4 var(--font-mono);
+  font: 0.66rem/1.4 var(--font-mono);
 }
 .case-side {
   display: grid;
@@ -1613,7 +1613,7 @@
   transform: rotate(7deg);
 }
 .proof-seal small {
-  font-size: 0.5rem;
+  font-size: 0.62rem;
   font-weight: 760;
   letter-spacing: 0.1em;
 }
@@ -1864,7 +1864,7 @@
 .crawl-progress li small {
   overflow: hidden;
   color: #555b56;
-  font: 0.58rem/1.35 var(--font-mono);
+  font: 0.66rem/1.35 var(--font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1908,7 +1908,7 @@
 }
 .evidence-stack figcaption {
   color: #2d6b4d;
-  font-size: 0.58rem;
+  font-size: 0.66rem;
   font-weight: 760;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -2029,7 +2029,7 @@
 }
 .source-change-comparison span {
   color: #76653f;
-  font-size: 0.58rem;
+  font-size: 0.66rem;
   font-weight: 760;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -2235,7 +2235,7 @@
     display: none;
   }
   .privacy-ribbon {
-    font-size: 0.58rem;
+    font-size: 0.66rem;
   }
   .scope-note {
     grid-template-columns: 1fr;

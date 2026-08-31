@@ -80,13 +80,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_ownerId_and_updatedAt", ["ownerId", "updatedAt"])
-    .index("by_ownerId_and_status_and_updatedAt", [
-      "ownerId",
-      "status",
-      "updatedAt",
-    ])
-    .index("by_crawlId", ["crawlId"]),
+    .index("by_ownerId_and_updatedAt", ["ownerId", "updatedAt"]),
   decisionEntities: defineTable({
     ownerId: v.id("users"),
     canonicalUrl: v.string(),
@@ -120,9 +114,7 @@ export default defineSchema({
     capturedAt: v.number(),
   })
     .index("by_decisionId_and_url", ["decisionId", "url"])
-    .index("by_decisionId_and_url_and_capturedAt", ["decisionId", "url", "capturedAt"])
-    .index("by_decisionId_and_contentHash", ["decisionId", "contentHash"])
-    .index("by_crawlId_and_url", ["crawlId", "url"]),
+    .index("by_decisionId_and_contentHash", ["decisionId", "contentHash"]),
   claimAssessments: defineTable({
     decisionId: v.id("decisions"),
     requirementId: v.id("decisionRequirements"),
@@ -137,8 +129,7 @@ export default defineSchema({
     order: v.number(),
     createdAt: v.number(),
   })
-    .index("by_decisionId_and_order", ["decisionId", "order"])
-    .index("by_requirementId", ["requirementId"]),
+    .index("by_decisionId_and_order", ["decisionId", "order"]),
   claimEvidence: defineTable({
     decisionId: v.id("decisions"),
     assessmentId: v.id("claimAssessments"),
@@ -193,10 +184,8 @@ export default defineSchema({
   })
     .index("by_decisionId_and_createdAt", ["decisionId", "createdAt"])
     .index("by_requestToken", ["requestToken"])
-    .index("by_outboundId", ["outboundId"])
     .index("by_messageId", ["messageId"])
-    .index("by_threadId", ["threadId"])
-    .index("by_status_and_createdAt", ["status", "createdAt"]),
+    .index("by_threadId", ["threadId"]),
   confirmationReplies: defineTable({
     decisionId: v.id("decisions"),
     requestId: v.id("confirmationRequests"),
@@ -223,8 +212,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_decisionId_and_createdAt", ["decisionId", "createdAt"])
-    .index("by_replyId", ["replyId"])
-    .index("by_requirementId", ["requirementId"]),
+    .index("by_replyId", ["replyId"]),
   proofCards: defineTable({
     decisionId: v.id("decisions"),
     ownerId: v.id("users"),
@@ -242,7 +230,6 @@ export default defineSchema({
     receivedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
-    .index("by_ownerId_and_createdAt", ["ownerId", "createdAt"])
     .index("by_decisionId", ["decisionId"]),
   proofItems: defineTable({
     proofCardId: v.id("proofCards"),

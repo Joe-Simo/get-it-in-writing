@@ -7,6 +7,7 @@ import { PromiseSeal } from "@/components/PromiseSeal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { errorText } from "@/lib/utils";
 
 export default function SignInPage() {
   const { signIn } = useAuthActions();
@@ -21,7 +22,16 @@ export default function SignInPage() {
     const form = new FormData(event.currentTarget);
     form.set("flow", flow);
     void signIn("password", form)
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Authentication failed"))
+      .catch((reason: unknown) =>
+        setError(
+          errorText(
+            reason,
+            flow === "signIn"
+              ? "That email and password combination was not accepted. Check both and try again."
+              : "The account could not be created. Use a valid email and a password of at least 8 characters.",
+          ),
+        ),
+      )
       .finally(() => setPending(false));
   }
 

@@ -1,4 +1,4 @@
-import { Infer, v } from "convex/values";
+import { ConvexError, Infer, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -51,39 +51,50 @@ async function requireOwnedDecision(
 ) {
   const ownerId = await requireUserId(ctx);
   const decision = await ctx.db.get("decisions", decisionId);
-  if (decision === null) throw new Error("404: decision not found");
-  if (decision.ownerId !== ownerId) throw new Error("403: decision is private");
+  if (decision === null) throw new ConvexError("This decision could not be found.");
+  if (decision.ownerId !== ownerId) throw new ConvexError("This decision is private to its owner.");
   return decision;
 }
 
-async function deleteDecisionGraph(ctx: MutationCtx, decisionId: Id<"decisions">) {
-  const proofCards = await ctx.db
+// Deletes one bounded batch of the decision's child rows and reports whether
+// another batch may remain, so callers can continue in a fresh transaction
+// instead of exceeding mutation limits on long-monitored decisions.
+async function deleteDecisionChildren(
+  ctx: MutationCtx,
+  decisionId: Id<"decisions">,
+): Promise<boolean> {
+  let more = false;
+  const batch = <T>(rows: T[], cap: number): T[] => {
+    if (rows.length >= cap) more = true;
+    return rows;
+  };
+  const proofCards = batch(await ctx.db
     .query("proofCards")
     .withIndex("by_decisionId", (q) => q.eq("decisionId", decisionId))
-    .take(20);
+    .take(20), 20);
   for (const card of proofCards) {
-    const items = await ctx.db
+    const items = batch(await ctx.db
       .query("proofItems")
       .withIndex("by_proofCardId_and_order", (q) => q.eq("proofCardId", card._id))
-      .take(50);
+      .take(50), 50);
     for (const item of items) await ctx.db.delete("proofItems", item._id);
     await ctx.db.delete("proofCards", card._id);
   }
 
-  const requests = await ctx.db
+  const requests = batch(await ctx.db
     .query("confirmationRequests")
     .withIndex("by_decisionId_and_createdAt", (q) => q.eq("decisionId", decisionId))
-    .take(20);
+    .take(20), 20);
   for (const request of requests) {
-    const replies = await ctx.db
+    const replies = batch(await ctx.db
       .query("confirmationReplies")
       .withIndex("by_requestId_and_receivedAt", (q) => q.eq("requestId", request._id))
-      .take(50);
+      .take(50), 50);
     for (const reply of replies) {
-      const outcomes = await ctx.db
+      const outcomes = batch(await ctx.db
         .query("confirmationOutcomes")
         .withIndex("by_replyId", (q) => q.eq("replyId", reply._id))
-        .take(50);
+        .take(50), 50);
       for (const outcome of outcomes) {
         await ctx.db.delete("confirmationOutcomes", outcome._id);
       }
@@ -92,28 +103,28 @@ async function deleteDecisionGraph(ctx: MutationCtx, decisionId: Id<"decisions">
     await ctx.db.delete("confirmationRequests", request._id);
   }
 
-  const assessments = await ctx.db
+  const assessments = batch(await ctx.db
     .query("claimAssessments")
     .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decisionId))
-    .take(100);
+    .take(100), 100);
   for (const assessment of assessments) {
-    const evidence = await ctx.db
+    const evidence = batch(await ctx.db
       .query("claimEvidence")
       .withIndex("by_assessmentId", (q) => q.eq("assessmentId", assessment._id))
-      .take(100);
+      .take(100), 100);
     for (const item of evidence) await ctx.db.delete("claimEvidence", item._id);
     await ctx.db.delete("claimAssessments", assessment._id);
   }
 
-  const requirements = await ctx.db
+  const requirements = batch(await ctx.db
     .query("decisionRequirements")
     .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decisionId))
-    .take(50);
+    .take(50), 50);
   for (const requirement of requirements) {
-    const ambiguities = await ctx.db
+    const ambiguities = batch(await ctx.db
       .query("decisionAmbiguities")
       .withIndex("by_requirementId", (q) => q.eq("requirementId", requirement._id))
-      .take(50);
+      .take(50), 50);
     for (const ambiguity of ambiguities) {
       await ctx.db.delete("decisionAmbiguities", ambiguity._id);
     }
@@ -121,18 +132,18 @@ async function deleteDecisionGraph(ctx: MutationCtx, decisionId: Id<"decisions">
   }
 
   const [sources, contacts, changes, monitors, events] = await Promise.all([
-    ctx.db.query("sourceDocuments").withIndex("by_decisionId_and_url", (q) => q.eq("decisionId", decisionId)).take(100),
-    ctx.db.query("officialContacts").withIndex("by_decisionId_and_createdAt", (q) => q.eq("decisionId", decisionId)).take(50),
-    ctx.db.query("sourceChanges").withIndex("by_decisionId_and_detectedAt", (q) => q.eq("decisionId", decisionId)).take(50),
-    ctx.db.query("changeMonitors").withIndex("by_decisionId", (q) => q.eq("decisionId", decisionId)).take(10),
-    ctx.db.query("decisionEvents").withIndex("by_decisionId_and_occurredAt", (q) => q.eq("decisionId", decisionId)).take(200),
+    ctx.db.query("sourceDocuments").withIndex("by_decisionId_and_url", (q) => q.eq("decisionId", decisionId)).take(100).then((rows) => batch(rows, 100)),
+    ctx.db.query("officialContacts").withIndex("by_decisionId_and_createdAt", (q) => q.eq("decisionId", decisionId)).take(50).then((rows) => batch(rows, 50)),
+    ctx.db.query("sourceChanges").withIndex("by_decisionId_and_detectedAt", (q) => q.eq("decisionId", decisionId)).take(50).then((rows) => batch(rows, 50)),
+    ctx.db.query("changeMonitors").withIndex("by_decisionId", (q) => q.eq("decisionId", decisionId)).take(10).then((rows) => batch(rows, 10)),
+    ctx.db.query("decisionEvents").withIndex("by_decisionId_and_occurredAt", (q) => q.eq("decisionId", decisionId)).take(200).then((rows) => batch(rows, 200)),
   ]);
   for (const row of sources) await ctx.db.delete("sourceDocuments", row._id);
   for (const row of contacts) await ctx.db.delete("officialContacts", row._id);
   for (const row of changes) await ctx.db.delete("sourceChanges", row._id);
   for (const row of monitors) await ctx.db.delete("changeMonitors", row._id);
   for (const row of events) await ctx.db.delete("decisionEvents", row._id);
-  await ctx.db.delete("decisions", decisionId);
+  return more;
 }
 
 export const listMine = query({
@@ -174,7 +185,10 @@ export const listMine = query({
 });
 
 export const getDetail = query({
-  args: { decisionId: v.id("decisions") },
+  // The id arrives from a user-editable URL, so it is normalized instead of
+  // validated: a malformed deep link renders the designed not-found state
+  // rather than crashing the workspace.
+  args: { decisionId: v.string() },
   returns: v.union(
     v.null(),
     v.object({
@@ -196,7 +210,9 @@ export const getDetail = query({
   ),
   handler: async (ctx, args) => {
     const ownerId = await requireUserId(ctx);
-    const decision = await ctx.db.get("decisions", args.decisionId);
+    const decisionId = ctx.db.normalizeId("decisions", args.decisionId);
+    if (decisionId === null) return null;
+    const decision = await ctx.db.get("decisions", decisionId);
     if (decision === null || decision.ownerId !== ownerId) return null;
     const [
       requirements,
@@ -302,7 +318,28 @@ export const remove = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await requireOwnedDecision(ctx, args.decisionId);
-    await deleteDecisionGraph(ctx, args.decisionId);
+    // Delete the owning row first so the wallet updates immediately; children
+    // are only reachable through the decision, so they purge in follow-up
+    // transactions without ever becoming visible.
+    await ctx.db.delete("decisions", args.decisionId);
+    const more = await deleteDecisionChildren(ctx, args.decisionId);
+    if (more) {
+      await ctx.scheduler.runAfter(0, internal.decisions.purgeDecisionGraph, {
+        decisionId: args.decisionId,
+      });
+    }
+    return null;
+  },
+});
+
+export const purgeDecisionGraph = internalMutation({
+  args: { decisionId: v.id("decisions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const more = await deleteDecisionChildren(ctx, args.decisionId);
+    if (more) {
+      await ctx.scheduler.runAfter(0, internal.decisions.purgeDecisionGraph, args);
+    }
     return null;
   },
 });
@@ -466,11 +503,18 @@ export const retryResearch = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const decision = await requireOwnedDecision(ctx, args.decisionId);
+    // A hard crash inside a pipeline action (timeout, out of memory) never
+    // records an operational failure, so a long-stalled in-flight status also
+    // unlocks this retry.
+    const stalled =
+      ["scoping", "researching", "analyzing"].includes(decision.status) &&
+      Date.now() - decision.updatedAt > 15 * 60 * 1_000;
     if (
       decision.operationalFailure !== "research_failed" &&
-      decision.operationalFailure !== "analysis_failed"
+      decision.operationalFailure !== "analysis_failed" &&
+      !stalled
     ) {
-      throw new Error("This decision does not need a research retry");
+      throw new ConvexError("This decision does not need a research retry.");
     }
     await ctx.db.patch("decisions", decision._id, {
       status: "scoping",
@@ -480,7 +524,15 @@ export const retryResearch = mutation({
       updatedAt: Date.now(),
     });
     await addEvent(ctx, decision._id, decision.status, "scoping", "Research retry requested");
-    await ctx.scheduler.runAfter(0, internal.research.start, { decisionId: decision._id });
+    const requirements = await ctx.db
+      .query("decisionRequirements")
+      .withIndex("by_decisionId_and_order", (q) => q.eq("decisionId", decision._id))
+      .take(1);
+    if (requirements.length === 0) {
+      await ctx.scheduler.runAfter(0, internal.researchOpenAI.scope, { decisionId: decision._id });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.research.start, { decisionId: decision._id });
+    }
     return null;
   },
 });

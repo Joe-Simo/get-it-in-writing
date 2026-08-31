@@ -15,7 +15,7 @@ const replyStatuses = new Set(["reply_received", "interpreting_reply", "partiall
 export default function DashboardPage() {
   const decisions = useQuery(api.decisions.listMine);
   const reducedMotion = useReducedMotion();
-  const [filter, setFilter] = useState<WalletFilter>("waiting");
+  const [chosenFilter, setChosenFilter] = useState<WalletFilter | null>(null);
   const counts = useMemo(() => {
     const rows = decisions ?? [];
     return {
@@ -24,6 +24,15 @@ export default function DashboardPage() {
       reply: rows.filter((item) => replyStatuses.has(item.status)).length,
     };
   }, [decisions]);
+  // Until the owner picks a section, open the first one that has cases so a
+  // wallet holding only Proof Cards never lands on an empty "Waiting" view.
+  const filter: WalletFilter =
+    chosenFilter ??
+    (counts.waiting > 0 || (counts.reply === 0 && counts.confirmed === 0)
+      ? "waiting"
+      : counts.reply > 0
+        ? "reply"
+        : "confirmed");
   const visible = useMemo(() => (decisions ?? []).filter((item) => {
     if (filter === "confirmed") return confirmedStatuses.has(item.status);
     if (filter === "reply") return replyStatuses.has(item.status);
@@ -37,10 +46,10 @@ export default function DashboardPage() {
         <Button asChild className="h-12 rounded-full bg-cobalt px-6 text-white hover:bg-[#153ae8]"><Link to="/app/new"><Plus /> New decision</Link></Button>
       </header>
 
-      <div className="wallet-tabs" role="tablist" aria-label="Filter decisions">
-        <FilterTab active={filter === "waiting"} onClick={() => setFilter("waiting")} label="Waiting" count={counts.waiting} />
-        <FilterTab active={filter === "confirmed"} onClick={() => setFilter("confirmed")} label="Proof Cards" count={counts.confirmed} />
-        <FilterTab active={filter === "reply"} onClick={() => setFilter("reply")} label="Reply received" count={counts.reply} />
+      <div className="wallet-tabs" role="group" aria-label="Filter decisions">
+        <FilterTab active={filter === "waiting"} onClick={() => setChosenFilter("waiting")} label="Waiting" count={counts.waiting} />
+        <FilterTab active={filter === "confirmed"} onClick={() => setChosenFilter("confirmed")} label="Proof Cards" count={counts.confirmed} />
+        <FilterTab active={filter === "reply"} onClick={() => setChosenFilter("reply")} label="Reply received" count={counts.reply} />
       </div>
 
       {decisions === undefined ? <WalletLoading /> : visible.length === 0 ? (
@@ -53,7 +62,15 @@ export default function DashboardPage() {
           <PromiseSeal className="empty-seal" intensity={0.7} />
           <div className="empty-wallet-copy">
             <p className="ink-label">Private by default</p>
-            <h2>{decisions.length === 0 ? "Nothing here yet." : `No ${filter === "reply" ? "replies" : filter} yet.`}</h2>
+            <h2>
+              {decisions.length === 0
+                ? "Nothing here yet."
+                : filter === "waiting"
+                  ? "Nothing is waiting right now."
+                  : filter === "confirmed"
+                    ? "No Proof Cards yet."
+                    : "No replies yet."}
+            </h2>
             <p>{decisions.length === 0 ? "Start with something you’re about to rely on." : "Your other decisions remain in their own wallet section."}</p>
             {decisions.length === 0 && <Button asChild className="mt-7 rounded-none bg-ink text-paper hover:bg-ink/90"><Link to="/app/new">Protect a decision <ArrowRight /></Link></Button>}
           </div>
@@ -91,7 +108,7 @@ export default function DashboardPage() {
 }
 
 function FilterTab({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: string; count: number }) {
-  return <button type="button" role="tab" aria-selected={active} className={active ? "active" : ""} onClick={onClick}>{label}<span>{count}</span></button>;
+  return <button type="button" aria-pressed={active} className={active ? "active" : ""} onClick={onClick}>{label}<span>{count}</span></button>;
 }
 
 function WalletLoading() {

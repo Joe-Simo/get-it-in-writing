@@ -786,7 +786,7 @@ test("inbound mail accepts only the expected sender and stores one reply without
       inbox_id: "inbox_get_it_in_writing",
       thread_id: "thread_inbound",
       message_id: "message_wrong_sender",
-      from: "someone-else@example.com",
+      from: "reservations@example-lookalike.net",
       subject: "Re: Connecting rooms",
       extracted_text: "Yes.",
     },
@@ -842,6 +842,78 @@ test("inbound mail accepts only the expected sender and stores one reply without
     analysisBody:
       "Yes, we can guarantee connecting rooms when both rooms use the Family Connect rate.",
   });
+  const setAsideEvents = await t.run(async (ctx) =>
+    ctx.db
+      .query("decisionEvents")
+      .withIndex("by_decisionId_and_occurredAt", (q) =>
+        q.eq("decisionId", fixture.decisionId),
+      )
+      .collect(),
+  );
+  expect(
+    setAsideEvents.filter((event) =>
+      event.label.includes("unrecognized sender"),
+    ),
+  ).toHaveLength(1);
+});
+
+test("a reply from another mailbox on the recipient's own domain is accepted", async () => {
+  vi.stubEnv("AGENTMAIL_INBOX_ID", "inbox_get_it_in_writing");
+  const { t, ownerId } = await createUserFixture();
+  const fixture = await t.run(async (ctx) => {
+    const decisionId = await ctx.db.insert("decisions", {
+      ownerId,
+      title: "Example stay",
+      sourceUrl: "https://stay.example.com.au/rooms",
+      sourceHost: "stay.example.com.au",
+      requirementText: "Interconnecting rooms must be guaranteed.",
+      category: "hotel",
+      status: "waiting",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const requestId = await ctx.db.insert("confirmationRequests", {
+      decisionId,
+      ownerId,
+      requestToken: "GIW-SAMEDOMAIN",
+      recipient: "reservations@example.com.au",
+      recipientSource: "official_page",
+      subject: "Interconnecting rooms [GIW-SAMEDOMAIN]",
+      body: "Can you confirm interconnecting rooms?",
+      followUpCount: 0,
+      status: "delivered",
+      threadId: "thread_same_domain",
+      sentAt: 2,
+      deliveredAt: 3,
+      createdAt: 2,
+      updatedAt: 3,
+    });
+    return { decisionId, requestId };
+  });
+
+  await t.mutation(internal.confirmations.onMessageReceived, {
+    eventId: "event_same_domain",
+    thread: {},
+    message: {
+      inbox_id: "inbox_get_it_in_writing",
+      thread_id: "thread_same_domain",
+      message_id: "message_same_domain",
+      from: "Front Desk <frontdesk@example.com.au>",
+      subject: "Re: Interconnecting rooms",
+      extracted_text: "Yes, both rooms are held for you.",
+    },
+  });
+
+  const replies = await t.run(async (ctx) =>
+    ctx.db
+      .query("confirmationReplies")
+      .withIndex("by_requestId_and_receivedAt", (q) =>
+        q.eq("requestId", fixture.requestId),
+      )
+      .collect(),
+  );
+  expect(replies).toHaveLength(1);
+  expect(replies[0]).toMatchObject({ messageId: "message_same_domain" });
 });
 
 test("source monitoring preserves both snapshots and deduplicates the same detected change", async () => {
@@ -974,4 +1046,124 @@ test("source monitoring preserves both snapshots and deduplicates the same detec
     ctx.db.get("sourceChanges", stored.changes[0]._id),
   );
   expect(acknowledged?.status).toBe("acknowledged");
+});
+
+test("late delivery events never regress a decision that moved past waiting", async () => {
+  const { t, ownerId } = await createUserFixture();
+  const fixture = await t.run(async (ctx) => {
+    const decisionId = await ctx.db.insert("decisions", {
+      ownerId,
+      title: "Example venue",
+      sourceUrl: "https://example.com/venue",
+      sourceHost: "example.com",
+      requirementText: "Outside catering must be permitted.",
+      category: "venue",
+      status: "confirmed",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const requestId = await ctx.db.insert("confirmationRequests", {
+      decisionId,
+      ownerId,
+      requestToken: "GIW-LATEEVENT1",
+      recipient: "events@example.com",
+      recipientSource: "official_page",
+      subject: "Outside catering [GIW-LATEEVENT1]",
+      body: "Can you confirm outside catering?",
+      followUpCount: 0,
+      status: "delivered",
+      threadId: "thread_late",
+      messageId: "message_late",
+      sentAt: 2,
+      deliveredAt: 3,
+      createdAt: 2,
+      updatedAt: 3,
+    });
+    return { decisionId, requestId };
+  });
+
+  // A delivery notification that lags behind the interpreted reply must not
+  // pull the finished decision back to "waiting" or downgrade the request.
+  await t.mutation(internal.confirmations.applyOutboundStatus, {
+    requestId: fixture.requestId,
+    status: "sent",
+  });
+  // A late spam-complaint event must not stamp a failure onto a finished case.
+  await t.mutation(internal.confirmations.applyOutboundStatus, {
+    requestId: fixture.requestId,
+    status: "complained",
+  });
+
+  const stored = await t.run(async (ctx) => ({
+    decision: await ctx.db.get("decisions", fixture.decisionId),
+    request: await ctx.db.get("confirmationRequests", fixture.requestId),
+  }));
+  expect(stored.decision?.status).toBe("confirmed");
+  expect(stored.decision?.operationalFailure).toBeUndefined();
+  expect(stored.request?.status).toBe("delivered");
+});
+
+test("a failed reply interpretation can be retried by the owner only", async () => {
+  const { t, ownerId, otherId } = await createUserFixture();
+  const fixture = await t.run(async (ctx) => {
+    const decisionId = await ctx.db.insert("decisions", {
+      ownerId,
+      title: "Example rental",
+      sourceUrl: "https://example.com/rental",
+      sourceHost: "example.com",
+      requirementText: "The bond must be refundable in full.",
+      category: "rental",
+      status: "interpreting_reply",
+      operationalFailure: "reply_processing_failed",
+      operationalMessage: "The written reply was saved, but its scope could not be interpreted yet.",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const requestId = await ctx.db.insert("confirmationRequests", {
+      decisionId,
+      ownerId,
+      requestToken: "GIW-RETRYREPLY",
+      recipient: "leasing@example.com",
+      recipientSource: "official_page",
+      subject: "Bond refund [GIW-RETRYREPLY]",
+      body: "Can you confirm the bond is refundable in full?",
+      followUpCount: 0,
+      status: "delivered",
+      threadId: "thread_retry",
+      sentAt: 2,
+      deliveredAt: 3,
+      createdAt: 2,
+      updatedAt: 3,
+    });
+    const replyId = await ctx.db.insert("confirmationReplies", {
+      decisionId,
+      requestId,
+      messageId: "message_retry_reply",
+      threadId: "thread_retry",
+      sender: "leasing@example.com",
+      subject: "Re: Bond refund",
+      body: "Yes, the bond is refundable in full.",
+      receivedAt: 4,
+      createdAt: 4,
+    });
+    return { decisionId, requestId, replyId };
+  });
+
+  await expect(
+    t
+      .withIdentity({ subject: otherId })
+      .mutation(api.confirmations.retryReplyInterpretation, {
+        decisionId: fixture.decisionId,
+      }),
+  ).rejects.toThrow("could not be found");
+
+  await t
+    .withIdentity({ subject: ownerId })
+    .mutation(api.confirmations.retryReplyInterpretation, {
+      decisionId: fixture.decisionId,
+    });
+
+  const decision = await t.run((ctx) => ctx.db.get("decisions", fixture.decisionId));
+  expect(decision?.status).toBe("reply_received");
+  expect(decision?.operationalFailure).toBeUndefined();
 });

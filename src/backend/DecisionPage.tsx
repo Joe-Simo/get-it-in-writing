@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { errorText } from "@/lib/utils";
 
 const terminalStatuses = new Set([
   "fully_established",
@@ -64,15 +65,6 @@ export default function DecisionPage() {
     ? { decisionId: decisionId as Id<"decisions"> }
     : "skip";
   const detail = useQuery(api.decisions.getDetail, queryArgs);
-  const progress = useQuery(api.research.progress, queryArgs);
-  const retryResearch = useMutation(api.decisions.retryResearch);
-  const requestCheck = useMutation(api.changes.requestCheck);
-  const acknowledgeChange = useMutation(api.changes.acknowledge);
-  const removeDecision = useMutation(api.decisions.remove);
-  const request = detail?.requests[0];
-  const [pending, setPending] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [deleteArmed, setDeleteArmed] = useState(false);
   const researchActive =
     detail && !detail.decision.operationalFailure
       ? [
@@ -83,6 +75,21 @@ export default function DecisionPage() {
           "drafting_confirmation",
         ].includes(detail.decision.status)
       : false;
+  const progress = useQuery(
+    api.research.progress,
+    researchActive && (detail?.assessments.length ?? 0) === 0 ? queryArgs : "skip",
+  );
+  const retryResearch = useMutation(api.decisions.retryResearch);
+  const requestCheck = useMutation(api.changes.requestCheck);
+  const acknowledgeChange = useMutation(api.changes.acknowledge);
+  const removeDecision = useMutation(api.decisions.remove);
+  const retryReply = useMutation(api.confirmations.retryReplyInterpretation);
+  const request = detail?.requests[0];
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [checkNotice, setCheckNotice] = useState("");
+  const [checkError, setCheckError] = useState("");
   const evidenceByAssessment = useMemo(() => {
     const grouped = new Map<string, Evidence[]>();
     for (const item of detail?.evidence ?? []) {
@@ -106,11 +113,19 @@ export default function DecisionPage() {
     try {
       await retryResearch({ decisionId: activeDecisionId });
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Research could not be restarted",
-      );
+      setError(errorText(reason, "Research could not be restarted."));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function retryReplyProcessing() {
+    setPending("retry-reply");
+    setError("");
+    try {
+      await retryReply({ decisionId: activeDecisionId });
+    } catch (reason) {
+      setError(errorText(reason, "The saved reply could not be re-processed."));
     } finally {
       setPending(null);
     }
@@ -118,15 +133,16 @@ export default function DecisionPage() {
 
   async function checkSources() {
     setPending("check");
-    setError("");
+    setCheckError("");
+    setCheckNotice("");
     try {
       await requestCheck({ decisionId: activeDecisionId });
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The source check could not be started",
+      setCheckNotice(
+        "Checking the official pages now. Any change appears on this case automatically.",
       );
+    } catch (reason) {
+      setCheckNotice("");
+      setCheckError(errorText(reason, "The source check could not be started."));
     } finally {
       setPending(null);
     }
@@ -138,11 +154,7 @@ export default function DecisionPage() {
     try {
       await acknowledgeChange({ sourceChangeId });
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The change could not be acknowledged",
-      );
+      setError(errorText(reason, "The change could not be acknowledged."));
     } finally {
       setPending(null);
     }
@@ -155,11 +167,7 @@ export default function DecisionPage() {
       await removeDecision({ decisionId: activeDecisionId });
       void navigate("/app", { replace: true });
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The private case could not be deleted",
-      );
+      setError(errorText(reason, "The private case could not be deleted."));
       setPending(null);
     }
   }
@@ -209,7 +217,7 @@ export default function DecisionPage() {
         <section className="operational-error" role="alert">
           <CircleAlert />
           <div>
-            <strong>The product stopped safely.</strong>
+            <strong>This case stopped safely.</strong>
             <p>{detail.decision.operationalMessage}</p>
           </div>
           {(["research_failed", "analysis_failed"] as string[]).includes(
@@ -226,6 +234,20 @@ export default function DecisionPage() {
                 <RefreshCw />
               )}{" "}
               Retry research
+            </Button>
+          )}
+          {detail.decision.operationalFailure === "reply_processing_failed" && (
+            <Button
+              variant="outline"
+              disabled={pending !== null}
+              onClick={() => void retryReplyProcessing()}
+            >
+              {pending === "retry-reply" ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <RefreshCw />
+              )}{" "}
+              Re-process the saved reply
             </Button>
           )}
         </section>
@@ -308,7 +330,7 @@ export default function DecisionPage() {
         <aside className="case-side">
           {request ? (
             <ConfirmationPanel
-              key={`${request._id}:${request.recipient ?? ""}:${detail.contacts[0]?._id ?? ""}`}
+              key={`${request._id}:${request.recipient ?? ""}`}
               request={request}
               contacts={detail.contacts}
             />
@@ -328,6 +350,8 @@ export default function DecisionPage() {
             (item) => item.followUpCount >= 1,
           )}
           checking={pending === "check"}
+          checkNotice={checkNotice}
+          checkError={checkError}
           onCheck={() => void checkSources()}
         />
       )}
@@ -622,19 +646,25 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
   const retryApprovedSend = useMutation(api.confirmations.retryApprovedSend);
   const providerStatus = useQuery(
     api.confirmations.sendStatus,
-    request.outboundId ? { requestId: request._id } : "skip",
+    request.outboundId && request.status !== "delivered"
+      ? { requestId: request._id }
+      : "skip",
   );
   const matchingContact = contacts.find(
     (item) => item.email === request.recipient,
   );
-  const initialContact = matchingContact ?? contacts[0];
+  // A saved manual recipient must never be presented as a published contact:
+  // when the draft's recipient matches no source-checked address, the panel
+  // opens on the manual entry showing exactly what will be sent.
+  const savedManual = request.recipient !== undefined && !matchingContact;
+  const initialContact = matchingContact ?? (savedManual ? undefined : contacts[0]);
   const [recipient, setRecipient] = useState(
     request.recipient ?? initialContact?.email ?? "",
   );
   const [contactChoice, setContactChoice] = useState<string>(
-    initialContact?._id ?? "manual",
+    savedManual ? "manual" : (initialContact?._id ?? "manual"),
   );
-  const [manualRecipient, setManualRecipient] = useState(false);
+  const [manualRecipient, setManualRecipient] = useState(savedManual);
   const [subject, setSubject] = useState(request.subject);
   const [body, setBody] = useState(request.body);
   const [approved, setApproved] = useState(false);
@@ -689,11 +719,7 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
         "Saved. Review this exact recipient and message before approving it.",
       );
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The draft could not be saved",
-      );
+      setError(errorText(reason, "The draft could not be saved."));
     } finally {
       setPending(null);
     }
@@ -717,11 +743,7 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
         "Your approved request is being sent. Delivery and real replies will update this case.",
       );
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The request could not be sent",
-      );
+      setError(errorText(reason, "The request could not be sent."));
     } finally {
       setPending(null);
     }
@@ -740,11 +762,7 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
         "Retry started for the same approved recipient, subject, and message.",
       );
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The approved request could not be retried",
-      );
+      setError(errorText(reason, "The approved request could not be retried."));
     } finally {
       setPending(null);
     }
@@ -783,7 +801,7 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
           )}
           <div className="space-y-5">
             <div>
-              <Label>Recipient</Label>
+              <Label id="confirmation-recipient-label">Recipient</Label>
               {contacts.length > 0 && (
                 <Select
                   value={effectiveContactChoice}
@@ -795,7 +813,10 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
                     markEdited();
                   }}
                 >
-                  <SelectTrigger className="mt-2 h-11 w-full">
+                  <SelectTrigger
+                    className="mt-2 h-11 w-full"
+                    aria-labelledby="confirmation-recipient-label"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -921,11 +942,12 @@ function ConfirmationPanel({ request, contacts }: ConfirmationPanelProps) {
           <strong>
             {providerFailed
               ? "Not sent"
-              : providerStatus?.status === "delivered"
-              ? "Delivered"
-              : providerStatus?.status === "sent"
-                ? "Sent"
-                : "Sending"}
+              : request.status === "delivered" ||
+                  providerStatus?.status === "delivered"
+                ? "Delivered"
+                : request.status === "sent" || providerStatus?.status === "sent"
+                  ? "Sent"
+                  : "Sending"}
           </strong>
           <p>To {request.recipient}</p>
           {request.sentAt && <small>{formatDateTime(request.sentAt)}</small>}
@@ -1050,6 +1072,8 @@ function ProofCard({
   items,
   followUpAlreadyPrepared,
   checking,
+  checkNotice,
+  checkError,
   onCheck,
 }: {
   card: {
@@ -1070,6 +1094,8 @@ function ProofCard({
   items: ProofItem[];
   followUpAlreadyPrepared: boolean;
   checking: boolean;
+  checkNotice: string;
+  checkError: string;
   onCheck: () => void;
 }) {
   const createFollowUp = useMutation(api.confirmations.createFollowUpDraft);
@@ -1081,11 +1107,7 @@ function ProofCard({
     try {
       await createFollowUp({ proofCardId: card._id });
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The follow-up could not be prepared",
-      );
+      setError(errorText(reason, "The follow-up could not be prepared."));
     } finally {
       setFollowUpPending(false);
     }
@@ -1211,6 +1233,16 @@ function ProofCard({
           </Button>
         </div>
       </div>
+      {checkNotice && (
+        <p role="status" className="form-notice mt-4">
+          {checkNotice}
+        </p>
+      )}
+      {checkError && (
+        <p role="alert" className="form-error mt-4">
+          {checkError}
+        </p>
+      )}
     </section>
   );
 }

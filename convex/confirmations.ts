@@ -5,7 +5,7 @@ import {
   vEvent,
   vOutboundStatus,
 } from "@agentmail/convex";
-import { type Infer, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -46,6 +46,28 @@ function addressEmail(value: string) {
   return (bracketed ?? value).trim().toLowerCase();
 }
 
+function registrableDomain(email: string) {
+  const host = email.split("@")[1]?.toLowerCase() ?? "";
+  const parts = host.split(".").filter(Boolean);
+  if (parts.length <= 2) return host;
+  // Handle common two-level public suffixes (com.au, co.uk, …) without a full
+  // public-suffix list; anything longer collapses to its registrable tail.
+  const secondLevel = new Set(["co", "com", "net", "org", "gov", "edu", "ac"]);
+  const country = parts[parts.length - 1] ?? "";
+  const second = parts[parts.length - 2] ?? "";
+  return country.length === 2 && secondLevel.has(second)
+    ? parts.slice(-3).join(".")
+    : parts.slice(-2).join(".");
+}
+
+function senderMatchesRecipient(sender: string, recipient: string) {
+  const senderEmail = addressEmail(sender);
+  const recipientEmail = recipient.toLowerCase();
+  if (senderEmail === recipientEmail) return true;
+  const senderDomain = registrableDomain(senderEmail);
+  return senderDomain !== "" && senderDomain === registrableDomain(recipientEmail);
+}
+
 function replyOnly(value: string) {
   const boundaryPatterns = [
     /\nOn .{0,300}wrote:\s*\n/i,
@@ -77,6 +99,9 @@ function overallVerdict(outcomes: Array<{ verdict: ProofVerdict }>): ProofVerdic
   }
   if (verdicts.every((verdict) => verdict === "not_confirmed")) return "not_confirmed";
   if (verdicts.every((verdict) => verdict === "declined")) return "declined";
+  if (verdicts.every((verdict) => verdict === "not_confirmed" || verdict === "declined")) {
+    return "not_confirmed";
+  }
   return "partially_confirmed";
 }
 
@@ -122,15 +147,32 @@ async function applyStatus(
   const decision = await ctx.db.get("decisions", request.decisionId);
   if (decision === null) return;
   const now = Date.now();
+  // Provider events and reconcile polls can arrive late or out of order, so
+  // status transitions must be monotonic: never regress a delivered request or
+  // a decision that has already moved past waiting.
+  const progress: Record<string, number> = { draft: -1, pending: 0, sent: 1, delivered: 2 };
+  const isFailure = ["failed", "bounced", "complained", "rejected"].includes(status);
+  const idFill = {
+    ...(threadId && !request.threadId ? { threadId } : {}),
+    ...(messageId && !request.messageId ? { messageId } : {}),
+  };
+  const skip = isFailure
+    ? !(request.status === "pending" || request.status === "sent")
+    : (progress[status] ?? -1) <= (progress[request.status] ?? Number.POSITIVE_INFINITY);
+  if (skip) {
+    if (Object.keys(idFill).length > 0) {
+      await ctx.db.patch("confirmationRequests", request._id, { ...idFill, updatedAt: now });
+    }
+    return;
+  }
   await ctx.db.patch("confirmationRequests", request._id, {
     status,
-    ...(threadId ? { threadId } : {}),
-    ...(messageId ? { messageId } : {}),
+    ...idFill,
     ...(status === "delivered" ? { deliveredAt: now } : {}),
     updatedAt: now,
   });
   if (status === "sent" || status === "delivered") {
-    if (decision.status !== "waiting" && decision.status !== "reply_received") {
+    if (decision.status === "sending") {
       await ctx.db.patch("decisions", decision._id, {
         status: "waiting",
         operationalFailure: undefined,
@@ -147,7 +189,10 @@ async function applyStatus(
     }
     return;
   }
-  if (["failed", "bounced", "complained", "rejected"].includes(status)) {
+  if (
+    isFailure &&
+    (decision.status === "sending" || decision.status === "waiting" || decision.status === "awaiting_approval")
+  ) {
     await ctx.db.patch("decisions", decision._id, {
       operationalFailure: "delivery_failed",
       operationalMessage: (errorMessage || "The confirmation email was not delivered. Review the recipient and try again.").slice(0, 500),
@@ -162,8 +207,8 @@ async function requireOwnedRequest(
 ) {
   const ownerId = await requireUserId(ctx);
   const request = await ctx.db.get("confirmationRequests", requestId);
-  if (request === null) throw new Error("404: confirmation request not found");
-  if (request.ownerId !== ownerId) throw new Error("403: confirmation request is private");
+  if (request === null) throw new ConvexError("This confirmation request could not be found.");
+  if (request.ownerId !== ownerId) throw new ConvexError("This confirmation request is private to its owner.");
   return request;
 }
 
@@ -179,7 +224,7 @@ export const saveDraft = mutation({
   handler: async (ctx, args): Promise<null> => {
     const request = await requireOwnedRequest(ctx, args.requestId);
     if (!["draft", "failed", "bounced", "complained", "rejected"].includes(request.status)) {
-      throw new Error("A sent request cannot be edited");
+      throw new ConvexError("A sent request cannot be edited.");
     }
     const recipient = normalizeEmail(args.recipient);
     const subject = boundedText(args.subject, 220, "Subject");
@@ -193,7 +238,7 @@ export const saveDraft = mutation({
         contact.decisionId !== request.decisionId ||
         contact.email !== recipient
       ) {
-        throw new Error("Choose a verified official contact or enter the address yourself");
+        throw new ConvexError("Choose a verified official contact or enter the address yourself.");
       }
       recipientSource = "official_page";
       recipientSourceUrl = contact.sourceUrl;
@@ -231,15 +276,15 @@ export const approveAndSend = mutation({
   returns: v.string(),
   handler: async (ctx, args): Promise<string> => {
     const request = await requireOwnedRequest(ctx, args.requestId);
-    if (request.status !== "draft") throw new Error("Review the draft before sending");
-    if (!request.recipient) throw new Error("Choose or enter the official recipient");
+    if (request.status !== "draft") throw new ConvexError("Review the draft before sending.");
+    if (!request.recipient) throw new ConvexError("Choose or enter the official recipient.");
     const decision = await ctx.db.get("decisions", request.decisionId);
-    if (decision === null) throw new Error("404: decision not found");
+    if (decision === null) throw new ConvexError("This decision could not be found.");
     if (decision.status !== "awaiting_approval") {
-      throw new Error("This decision is not waiting for send approval");
+      throw new ConvexError("This decision is not waiting for send approval.");
     }
     const inboxId = process.env.AGENTMAIL_INBOX_ID;
-    if (!inboxId) throw new Error("AgentMail is not configured for this deployment");
+    if (!inboxId) throw new ConvexError("Email delivery is not configured for this deployment.");
     const outboundId: OutboundId = await agentmail.sendMessage(ctx, inboxId, {
       to: request.recipient,
       subject: request.subject,
@@ -285,22 +330,22 @@ export const retryApprovedSend = mutation({
   handler: async (ctx, args): Promise<string> => {
     const request = await requireOwnedRequest(ctx, args.requestId);
     if (!request.approvedAt || !request.recipient) {
-      throw new Error("Review and approve the exact message before sending");
+      throw new ConvexError("Review and approve the exact message before sending.");
     }
     if (!request.outboundId) {
-      throw new Error("There is no failed delivery to retry");
+      throw new ConvexError("There is no failed delivery to retry.");
     }
     const priorStatus = await agentmail.status(
       ctx,
       request.outboundId as OutboundId,
     );
     if (priorStatus?.status !== "failed") {
-      throw new Error("The existing delivery is still active or already sent");
+      throw new ConvexError("The existing delivery is still active or already sent.");
     }
     const decision = await ctx.db.get("decisions", request.decisionId);
-    if (decision === null) throw new Error("404: decision not found");
+    if (decision === null) throw new ConvexError("This decision could not be found.");
     const inboxId = process.env.AGENTMAIL_INBOX_ID;
-    if (!inboxId) throw new Error("AgentMail is not configured for this deployment");
+    if (!inboxId) throw new ConvexError("Email delivery is not configured for this deployment.");
 
     const outboundId: OutboundId = await agentmail.sendMessage(ctx, inboxId, {
       to: request.recipient,
@@ -380,7 +425,7 @@ export const reconcileOutbound = internalAction({
   args: { requestId: v.id("confirmationRequests"), attempt: v.number() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (!Number.isInteger(args.attempt) || args.attempt < 0 || args.attempt > 8) return null;
+    if (!Number.isInteger(args.attempt) || args.attempt < 0 || args.attempt > 12) return null;
     const context = await ctx.runQuery(internal.confirmations.getOutboundContext, {
       requestId: args.requestId,
     });
@@ -397,11 +442,22 @@ export const reconcileOutbound = internalAction({
       ...(status.agentmailMessageId ? { messageId: status.agentmailMessageId } : {}),
       ...(status.errorMessage ? { errorMessage: status.errorMessage } : {}),
     });
-    if (status.status === "pending" && args.attempt < 8) {
-      await ctx.scheduler.runAfter(Math.min(60_000, 4_000 * 2 ** args.attempt), internal.confirmations.reconcileOutbound, {
-        requestId: args.requestId,
-        attempt: args.attempt + 1,
-      });
+    if (status.status === "pending") {
+      if (args.attempt < 12) {
+        await ctx.scheduler.runAfter(Math.min(600_000, 4_000 * 2 ** args.attempt), internal.confirmations.reconcileOutbound, {
+          requestId: args.requestId,
+          attempt: args.attempt + 1,
+        });
+      } else {
+        // Stop polling honestly instead of leaving the case in "sending"
+        // forever. Webhook events still update the case if the send completes.
+        await ctx.runMutation(internal.decisions.recordOperationalFailure, {
+          decisionId: context.decision._id,
+          kind: "delivery_failed",
+          message:
+            "The provider has not confirmed this send yet. It may still be delivered; this case updates automatically when the provider reports back.",
+        });
+      }
     }
     return null;
   },
@@ -435,12 +491,12 @@ export const onAgentMailEvent = internalMutation({
       ? await ctx.db
           .query("confirmationRequests")
           .withIndex("by_threadId", (q) => q.eq("threadId", threadId))
-          .unique()
+          .first()
       : messageId
         ? await ctx.db
             .query("confirmationRequests")
             .withIndex("by_messageId", (q) => q.eq("messageId", messageId))
-            .unique()
+            .first()
         : null;
     if (request !== null) await applyStatus(ctx, request._id, status, threadId, messageId);
     return null;
@@ -493,7 +549,7 @@ export const onMessageReceived = internalMutation({
     const prior = await ctx.db
       .query("confirmationReplies")
       .withIndex("by_messageId", (q) => q.eq("messageId", messageId))
-      .unique();
+      .first();
     if (prior !== null) return null;
     const subject = (stringField(message, "subject") ?? "").slice(0, 500);
     const body = (
@@ -506,25 +562,37 @@ export const onMessageReceived = internalMutation({
     let request = await ctx.db
       .query("confirmationRequests")
       .withIndex("by_threadId", (q) => q.eq("threadId", threadId))
-      .unique();
+      .first();
     if (request === null) {
       const token = `${subject}\n${body}`.match(/GIW-[A-Z0-9]{10}/i)?.[0]?.toUpperCase();
       request = token
         ? await ctx.db
             .query("confirmationRequests")
             .withIndex("by_requestToken", (q) => q.eq("requestToken", token))
-            .unique()
+            .first()
         : null;
     }
     if (request === null) return null;
-    if (
-      request.recipient !== undefined &&
-      addressEmail(sender) !== request.recipient.toLowerCase()
-    ) {
-      return null;
-    }
     const decision = await ctx.db.get("decisions", request.decisionId);
     if (decision === null) return null;
+    if (request.recipient !== undefined && !senderMatchesRecipient(sender, request.recipient)) {
+      // Businesses often reply from a mailbox on the same domain (a named
+      // agent instead of reservations@). A same-domain reply is accepted; a
+      // reply from an unrelated domain is set aside with a visible trace
+      // instead of silently vanishing.
+      console.warn("Get It in Writing reply set aside: sender domain mismatch", {
+        requestId: request._id,
+        messageId,
+      });
+      await ctx.db.insert("decisionEvents", {
+        decisionId: decision._id,
+        fromStatus: decision.status,
+        toStatus: decision.status,
+        label: "A reply from an unrecognized sender address was set aside",
+        occurredAt: Date.now(),
+      });
+      return null;
+    }
     const receivedAtRaw = stringField(message, "timestamp") ?? stringField(message, "created_at");
     const receivedAt = receivedAtRaw ? Date.parse(receivedAtRaw) : Date.now();
     const safeReceivedAt = Number.isFinite(receivedAt) ? receivedAt : Date.now();
@@ -766,6 +834,59 @@ export const storeReplyInterpretation = internalMutation({
   },
 });
 
+export const retryReplyInterpretation = mutation({
+  args: { decisionId: v.id("decisions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const ownerId = await requireUserId(ctx);
+    const decision = await ctx.db.get("decisions", args.decisionId);
+    if (decision === null || decision.ownerId !== ownerId) {
+      throw new ConvexError("This decision could not be found.");
+    }
+    const stalled =
+      decision.status === "interpreting_reply" &&
+      Date.now() - decision.updatedAt > 15 * 60 * 1_000;
+    if (decision.operationalFailure !== "reply_processing_failed" && !stalled) {
+      throw new ConvexError("This decision does not need a reply retry.");
+    }
+    const requests = await ctx.db
+      .query("confirmationRequests")
+      .withIndex("by_decisionId_and_createdAt", (q) => q.eq("decisionId", decision._id))
+      .order("desc")
+      .take(10);
+    let latestReply = null;
+    for (const request of requests) {
+      const reply = await ctx.db
+        .query("confirmationReplies")
+        .withIndex("by_requestId_and_receivedAt", (q) => q.eq("requestId", request._id))
+        .order("desc")
+        .first();
+      if (reply !== null && (latestReply === null || reply.receivedAt > latestReply.receivedAt)) {
+        latestReply = reply;
+      }
+    }
+    if (latestReply === null) throw new ConvexError("There is no saved reply to interpret.");
+    const now = Date.now();
+    await ctx.db.patch("decisions", decision._id, {
+      status: "reply_received",
+      operationalFailure: undefined,
+      operationalMessage: undefined,
+      updatedAt: now,
+    });
+    await ctx.db.insert("decisionEvents", {
+      decisionId: decision._id,
+      fromStatus: decision.status,
+      toStatus: "reply_received",
+      label: "Retrying interpretation of the saved reply",
+      occurredAt: now,
+    });
+    await ctx.scheduler.runAfter(0, internal.confirmationOpenAI.interpret, {
+      replyId: latestReply._id,
+    });
+    return null;
+  },
+});
+
 export const createFollowUpDraft = mutation({
   args: { proofCardId: v.id("proofCards") },
   returns: v.id("confirmationRequests"),
@@ -773,21 +894,21 @@ export const createFollowUpDraft = mutation({
     const ownerId = await requireUserId(ctx);
     const proofCard = await ctx.db.get("proofCards", args.proofCardId);
     if (proofCard === null || proofCard.ownerId !== ownerId) {
-      throw new Error("404: Proof Card not found");
+      throw new ConvexError("This Proof Card could not be found.");
     }
-    if (!proofCard.suggestedFollowUp) throw new Error("This reply does not need a follow-up");
+    if (!proofCard.suggestedFollowUp) throw new ConvexError("This reply does not need a follow-up.");
     const decision = await ctx.db.get("decisions", proofCard.decisionId);
-    if (decision === null || decision.ownerId !== ownerId) throw new Error("403: decision is private");
+    if (decision === null || decision.ownerId !== ownerId) throw new ConvexError("This decision is private to its owner.");
     const requests = await ctx.db
       .query("confirmationRequests")
       .withIndex("by_decisionId_and_createdAt", (q) => q.eq("decisionId", decision._id))
       .order("desc")
       .take(10);
     if (requests.some((request) => request.followUpCount >= 1)) {
-      throw new Error("The one permitted follow-up has already been prepared");
+      throw new ConvexError("The one permitted follow-up has already been prepared.");
     }
     const prior = requests[0];
-    if (!prior?.recipient) throw new Error("The original recipient is unavailable");
+    if (!prior?.recipient) throw new ConvexError("The original recipient is unavailable.");
     const now = Date.now();
     const requestToken = `GIW-${crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
     const requestId = await ctx.db.insert("confirmationRequests", {

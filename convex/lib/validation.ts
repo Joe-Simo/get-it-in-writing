@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 const MAX_URL_LENGTH = 2_048;
 
 function isPrivateIpv4(hostname: string) {
@@ -19,16 +20,16 @@ function isPrivateIpv4(hostname: string) {
 export function normalizeOfficialUrl(value: string) {
   const trimmed = value.trim();
   if (trimmed.length === 0 || trimmed.length > MAX_URL_LENGTH) {
-    throw new Error("Enter a complete official page URL");
+    throw new ConvexError("Enter a complete official page URL");
   }
   let url: URL;
   try {
     url = new URL(trimmed);
   } catch {
-    throw new Error("Enter a valid official page URL");
+    throw new ConvexError("Enter a valid official page URL");
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("The official page must use http or https");
+    throw new ConvexError("The official page must use http or https");
   }
   const hostname = url.hostname.toLowerCase();
   if (
@@ -39,10 +40,10 @@ export function normalizeOfficialUrl(value: string) {
     hostname.startsWith("[") ||
     isPrivateIpv4(hostname)
   ) {
-    throw new Error("Use a public official website, not a private network URL");
+    throw new ConvexError("Use a public official website, not a private network URL");
   }
   if (url.username || url.password) {
-    throw new Error("Official page URLs cannot contain credentials");
+    throw new ConvexError("Official page URLs cannot contain credentials");
   }
   url.hash = "";
   return url.toString();
@@ -51,17 +52,17 @@ export function normalizeOfficialUrl(value: string) {
 export function normalizeRequirement(value: string) {
   const text = value.trim().replace(/\s+/g, " ");
   if (text.length < 12) {
-    throw new Error("Say specifically what must be true");
+    throw new ConvexError("Say specifically what must be true");
   }
   if (text.length > 800) {
-    throw new Error("Keep the requirement under 800 characters");
+    throw new ConvexError("Keep the requirement under 800 characters");
   }
   return text;
 }
 
 export function normalizeContext(value: string | undefined) {
   const text = value?.trim().replace(/\s+/g, " ") ?? "";
-  if (text.length > 1_500) throw new Error("Keep the context under 1,500 characters");
+  if (text.length > 1_500) throw new ConvexError("Keep the context under 1,500 characters");
   return text || undefined;
 }
 
@@ -96,7 +97,7 @@ export function assertSupportedDecision(requirement: string, context?: string) {
   const combined = `${requirement}\n${context ?? ""}`;
   const match = highStakesPatterns.find(({ pattern }) => pattern.test(combined));
   if (match) {
-    throw new Error(
+    throw new ConvexError(
       `Get It in Writing does not handle ${match.label}. Use it for ordinary purchases, bookings, rentals, venues, products, contractors, or consumer services.`,
     );
   }
@@ -108,15 +109,15 @@ export function normalizeEmail(value: string) {
     email.length > 254 ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   ) {
-    throw new Error("Enter a valid email address");
+    throw new ConvexError("Enter a valid email address");
   }
   return email;
 }
 
 export function boundedText(value: string, max: number, label: string) {
   const text = value.trim();
-  if (text.length === 0) throw new Error(`${label} cannot be empty`);
-  if (text.length > max) throw new Error(`${label} is too long`);
+  if (text.length === 0) throw new ConvexError(`${label} cannot be empty`);
+  if (text.length > max) throw new ConvexError(`${label} is too long`);
   return text;
 }
 

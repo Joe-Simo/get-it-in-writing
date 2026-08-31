@@ -1,5 +1,5 @@
 import { FirecrawlClient } from "@firecrawl/firecrawl-convex";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import {
@@ -255,14 +255,14 @@ export const requestCheck = mutation({
   handler: async (ctx, args) => {
     const ownerId = await requireUserId(ctx);
     const decision = await ctx.db.get("decisions", args.decisionId);
-    if (decision === null || decision.ownerId !== ownerId) throw new Error("404: decision not found");
+    if (decision === null || decision.ownerId !== ownerId) throw new ConvexError("This decision could not be found.");
     const monitor = await ctx.db
       .query("changeMonitors")
       .withIndex("by_decisionId", (q) => q.eq("decisionId", decision._id))
       .first();
-    if (monitor === null) throw new Error("Source monitoring starts after a Proof Card is created");
+    if (monitor === null) throw new ConvexError("Source monitoring starts after a Proof Card is created.");
     if (monitor.lastCheckedAt && Date.now() - monitor.lastCheckedAt < 5 * 60 * 1_000) {
-      throw new Error("The sources were checked less than five minutes ago");
+      throw new ConvexError("The sources were checked less than five minutes ago.");
     }
     await ctx.scheduler.runAfter(0, internal.changes.checkDecision, { decisionId: decision._id });
     return null;
@@ -275,9 +275,9 @@ export const acknowledge = mutation({
   handler: async (ctx, args) => {
     const ownerId = await requireUserId(ctx);
     const change = await ctx.db.get("sourceChanges", args.sourceChangeId);
-    if (change === null) throw new Error("404: source change not found");
+    if (change === null) throw new ConvexError("This source change could not be found.");
     const decision = await ctx.db.get("decisions", change.decisionId);
-    if (decision === null || decision.ownerId !== ownerId) throw new Error("403: decision is private");
+    if (decision === null || decision.ownerId !== ownerId) throw new ConvexError("This decision is private to its owner.");
     await ctx.db.patch("sourceChanges", change._id, {
       status: "acknowledged",
       acknowledgedAt: Date.now(),

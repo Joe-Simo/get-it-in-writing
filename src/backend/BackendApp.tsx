@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, type ReactNode } from "react";
-import { Authenticated, Unauthenticated } from "convex/react";
+import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "@/backend/AppShell";
 import SignInPage from "@/backend/SignInPage";
@@ -27,6 +27,7 @@ export default function BackendApp() {
         </WorkspaceErrorBoundary>
       </Authenticated>
       <Unauthenticated><SignInPage /></Unauthenticated>
+      <AuthLoading><WorkspaceLoader /></AuthLoading>
     </>
   );
 }

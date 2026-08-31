@@ -14,7 +14,7 @@ export default function AppShell() {
         <nav aria-label="Promise Wallet navigation" className="app-nav">
           <NavLink to="/app" end>Promise Wallet</NavLink>
           <Button asChild className="rounded-full bg-cobalt text-white hover:bg-[#153ae8]">
-            <NavLink to="/app/new"><Plus aria-hidden="true" /> New decision</NavLink>
+            <NavLink to="/app/new" aria-label="New decision"><Plus aria-hidden="true" /> <span className="button-text">New decision</span></NavLink>
           </Button>
           <button type="button" className="icon-button" aria-label="Sign out" onClick={() => void signOut()}><LogOut aria-hidden="true" /></button>
         </nav>

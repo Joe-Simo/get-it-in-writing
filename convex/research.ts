@@ -8,7 +8,9 @@ import { requireUserId } from "./model/auth";
 const firecrawl = new FirecrawlClient(components.firecrawl);
 
 export const progress = query({
-  args: { decisionId: v.id("decisions") },
+  // Takes the raw route param; a malformed id resolves to null like an
+  // unknown decision instead of throwing a validation error.
+  args: { decisionId: v.string() },
   returns: v.union(
     v.null(),
     v.object({
@@ -35,7 +37,9 @@ export const progress = query({
   ),
   handler: async (ctx, args) => {
     const ownerId = await requireUserId(ctx);
-    const decision = await ctx.db.get("decisions", args.decisionId);
+    const decisionId = ctx.db.normalizeId("decisions", args.decisionId);
+    if (decisionId === null) return null;
+    const decision = await ctx.db.get("decisions", decisionId);
     if (decision === null || decision.ownerId !== ownerId) return null;
     if (!decision.crawlId) {
       return {
@@ -163,6 +167,10 @@ export const onCrawlComplete = internalMutation({
     if (typeof rawDecisionId !== "string") return null;
     const decisionId = ctx.db.normalizeId("decisions", rawDecisionId);
     if (decisionId === null) return null;
+    const decision = await ctx.db.get("decisions", decisionId);
+    // A retry clears crawlId and starts a fresh crawl; a stale or duplicate
+    // completion callback for a superseded crawl must not drive the pipeline.
+    if (decision === null || decision.crawlId !== args.crawlId) return null;
     if (args.status !== "completed" || args.pageCount < 1) {
       await ctx.runMutation(internal.decisions.recordOperationalFailure, {
         decisionId,

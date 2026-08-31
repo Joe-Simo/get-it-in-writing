@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation } from "convex/react";
 import { ArrowLeft, ArrowRight, Link2, LoaderCircle, LockKeyhole, ShieldAlert } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { errorText } from "@/lib/utils";
 
 export default function NewDecisionPage() {
   const createDecision = useMutation(api.decisions.create);
@@ -18,13 +19,21 @@ export default function NewDecisionPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem("giw:draft");
+    } catch {
+      // Storage may be blocked; the draft was already read into state.
+    }
+  }, []);
+
   function submit(event: FormEvent) {
     event.preventDefault();
     setPending(true);
     setError("");
     void createDecision({ sourceUrl, requirementText, ...(context.trim() ? { context } : {}) })
       .then((decisionId) => navigate(`/app/decisions/${decisionId}`))
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "The decision could not be started"))
+      .catch((reason: unknown) => setError(errorText(reason, "The decision could not be started. Check the URL and try again.")))
       .finally(() => setPending(false));
   }
 
@@ -59,9 +68,13 @@ export default function NewDecisionPage() {
 
 function readLocalDraft() {
   const empty = { sourceUrl: "", requirementText: "" };
-  const raw = sessionStorage.getItem("giw:draft");
+  let raw: string | null = null;
+  try {
+    raw = sessionStorage.getItem("giw:draft");
+  } catch {
+    return empty;
+  }
   if (!raw) return empty;
-  sessionStorage.removeItem("giw:draft");
   try {
     const draft = JSON.parse(raw) as {
       sourceUrl?: unknown;

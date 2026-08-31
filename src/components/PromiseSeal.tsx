@@ -11,6 +11,16 @@ export function PromiseSeal({
 }: PromiseSealProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [mode, setMode] = useState<"loading" | "ready" | "fallback">("loading");
+  const [reducedMotion, setReducedMotion] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = () => setReducedMotion(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -45,9 +55,6 @@ export function PromiseSeal({
             clearColor: [0, 0, 0, 0],
             label: "promise-seal",
           });
-          const reducedMotion = window.matchMedia(
-            "(prefers-reduced-motion: reduce)",
-          ).matches;
           const params = {
             time: 0,
             motion: reducedMotion ? 0 : 1,
@@ -61,6 +68,9 @@ export function PromiseSeal({
           const unsubscribe = target.onResize(({ width, height }) => {
             params.aspect = width / Math.max(1, height);
             seal.set({ params });
+            // Without a running loop, a resize clears the canvas; repaint the
+            // single static frame so the seal never blanks.
+            if (reducedMotion) frame(gpu, (current) => current.pass(target, seal));
           });
           const timer = clock(gpu);
           if (reducedMotion) {
@@ -108,7 +118,7 @@ export function PromiseSeal({
       disposed = true;
       dispose?.();
     };
-  }, [intensity]);
+  }, [intensity, reducedMotion]);
 
   return (
     <div

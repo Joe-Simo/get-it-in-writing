@@ -27,10 +27,14 @@ export default function LandingPage() {
 
   function begin(event: FormEvent) {
     event.preventDefault();
-    sessionStorage.setItem(
-      "giw:draft",
-      JSON.stringify({ sourceUrl: sourceUrl.trim(), requirementText: requirementText.trim() }),
-    );
+    try {
+      sessionStorage.setItem(
+        "giw:draft",
+        JSON.stringify({ sourceUrl: sourceUrl.trim(), requirementText: requirementText.trim() }),
+      );
+    } catch {
+      // Storage can be blocked; continue without carrying the draft over.
+    }
     void navigate("/app/new");
   }
 

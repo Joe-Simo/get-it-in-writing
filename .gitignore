@@ -13,6 +13,7 @@ lerna-debug.log*
 !.agents/skills/convex-hackathon-skill/
 !.agents/skills/convex-hackathon-skill/**
 .playwright
+.playwright-mcp/
 .firecrawl/
 test-results
 playwright-report
