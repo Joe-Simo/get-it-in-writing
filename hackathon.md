@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-31T02:10:11Z
+- **Last updated:** 2026-08-31T15:30:13Z
 
 ## Log
 
@@ -295,3 +295,21 @@ scope, crawl, and analysis pipeline rather than authored rows
 Verified strict lint and type checking, 32 tests, the production build, and
 23 desktop/mobile browser journeys including the new ink-stage fallback
 contract, then deployed only `joe-simo/get-it-in-writing`.
+
+### 2026-08-31 - 030e3f4
+
+Completed the full written-reply loop on production with a transparent,
+consenting-recipient case: the demo wallet asked Get It in Writing's own maker
+to confirm, in writing, that cases stay private and nothing sends without
+approval — including after the hackathon ends, a commitment no page publishes.
+The maker's real reply came back through the webhook and produced a
+written-reply Proof Card whose verdict preserved his own hedge as a condition:
+confirmed with conditions, "as long as the service runs."
+
+The live test exposed a real ingestion bug before it could cost a genuine
+provider reply: HTML-only messages arrived with empty text and were scored as
+unresponsive. Inbound processing now converts HTML to readable text and, when
+a webhook payload is entirely textless, hydrates the stored thread over the
+AgentMail API before interpretation (`convex/confirmations.ts`,
+`convex/demo.ts`). Verified strict lint and type checking, 34 tests including
+HTML-reply regression coverage, and deployed only `joe-simo/get-it-in-writing`.
