@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "signal-garden",
+      "name": "get-it-in-writing",
       "dependencies": {
         "@agentmail/convex": "0.1.0",
         "@convex-dev/auth": "^0.0.95",
