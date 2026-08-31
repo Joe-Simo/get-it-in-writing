@@ -23,6 +23,7 @@ import {
   normalizeRequirement,
   sourceHost,
 } from "./lib/validation";
+import { enforceResearchLimit } from "./limits";
 import { requireUserId } from "./model/auth";
 import schema from "./schema";
 
@@ -353,6 +354,7 @@ export const create = mutation({
   returns: v.id("decisions"),
   handler: async (ctx, args) => {
     const ownerId = await requireUserId(ctx);
+    await enforceResearchLimit(ctx, ownerId);
     const sourceUrl = normalizeOfficialUrl(args.sourceUrl);
     const requirementText = normalizeRequirement(args.requirementText);
     const context = normalizeContext(args.context);
@@ -516,6 +518,7 @@ export const retryResearch = mutation({
     ) {
       throw new ConvexError("This decision does not need a research retry.");
     }
+    await enforceResearchLimit(ctx, decision.ownerId);
     await ctx.db.patch("decisions", decision._id, {
       status: "scoping",
       operationalFailure: undefined,

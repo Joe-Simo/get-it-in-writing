@@ -19,6 +19,7 @@ import type * as http from "../http.js";
 import type * as lib_decisionState from "../lib/decisionState.js";
 import type * as lib_officialContact from "../lib/officialContact.js";
 import type * as lib_validation from "../lib/validation.js";
+import type * as limits from "../limits.js";
 import type * as model_auth from "../model/auth.js";
 import type * as readiness from "../readiness.js";
 import type * as research from "../research.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   "lib/decisionState": typeof lib_decisionState;
   "lib/officialContact": typeof lib_officialContact;
   "lib/validation": typeof lib_validation;
+  limits: typeof limits;
   "model/auth": typeof model_auth;
   readiness: typeof readiness;
   research: typeof research;
@@ -77,5 +79,6 @@ export declare const internal: FilterApi<
 export declare const components: {
   agentmail: import("@agentmail/convex/_generated/component.js").ComponentApi<"agentmail">;
   firecrawl: import("@firecrawl/firecrawl-convex/_generated/component.js").ComponentApi<"firecrawl">;
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
   staticHosting: import("@convex-dev/static-hosting/_generated/component.js").ComponentApi<"staticHosting">;
 };

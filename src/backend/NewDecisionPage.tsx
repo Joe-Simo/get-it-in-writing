@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { errorText } from "@/lib/utils";
+import { workedExample } from "@/lib/workedExample";
 
 export default function NewDecisionPage() {
   const createDecision = useMutation(api.decisions.create);
@@ -45,6 +46,18 @@ export default function NewDecisionPage() {
         <section>
           <div className="form-step"><span>1</span><div><h2>Start with an official source</h2><p>Use the provider’s own website—not a review, search result, or social post.</p></div></div>
           <div className="input-with-icon mt-6"><Link2 /><Input aria-label="Official page" type="url" required autoComplete="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://official-site.com/page" /></div>
+          {!sourceUrl && !requirementText && (
+            <button
+              type="button"
+              className="worked-example-fill"
+              onClick={() => {
+                setSourceUrl(workedExample.sourceUrl);
+                setRequirementText(workedExample.requirementText);
+              }}
+            >
+              No page handy? Fill a worked example — a real hotel and a real “must be true.”
+            </button>
+          )}
         </section>
         <section>
           <div className="form-step"><span>2</span><div><h2>Tell us what must be true</h2><p>Write naturally. We’ll preserve dates, quantities, models, room types, and other conditions as separate boundaries.</p></div></div>

@@ -17,6 +17,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { proofVerdict } from "./lib/decisionState";
+import { enforceResetCodeLimit, enforceSendLimit } from "./limits";
 import { boundedText, normalizeEmail } from "./lib/validation";
 import { requireUserId } from "./model/auth";
 import schema from "./schema";
@@ -283,6 +284,7 @@ export const approveAndSend = mutation({
     if (decision.status !== "awaiting_approval") {
       throw new ConvexError("This decision is not waiting for send approval.");
     }
+    await enforceSendLimit(ctx, request.ownerId);
     const inboxId = process.env.AGENTMAIL_INBOX_ID;
     if (!inboxId) throw new ConvexError("Email delivery is not configured for this deployment.");
     const outboundId: OutboundId = await agentmail.sendMessage(ctx, inboxId, {
@@ -344,6 +346,7 @@ export const retryApprovedSend = mutation({
     }
     const decision = await ctx.db.get("decisions", request.decisionId);
     if (decision === null) throw new ConvexError("This decision could not be found.");
+    await enforceSendLimit(ctx, request.ownerId);
     const inboxId = process.env.AGENTMAIL_INBOX_ID;
     if (!inboxId) throw new ConvexError("Email delivery is not configured for this deployment.");
 
@@ -838,6 +841,7 @@ export const sendPasswordResetCode = internalMutation({
   args: { email: v.string(), code: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await enforceResetCodeLimit(ctx, args.email);
     const inboxId = process.env.AGENTMAIL_INBOX_ID;
     if (!inboxId) throw new Error("AgentMail is not configured for this deployment");
     await agentmail.sendMessage(ctx, inboxId, {

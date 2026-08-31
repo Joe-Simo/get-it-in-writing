@@ -2321,3 +2321,18 @@
     border-color: currentColor;
   }
 }
+
+.worked-example-fill {
+  display: block;
+  width: 100%;
+  margin-top: 0.85rem;
+  color: rgb(16 21 17 / 68%);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.worked-example-fill:hover {
+  color: #101511;
+}

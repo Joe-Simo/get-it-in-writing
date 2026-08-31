@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import { convexTest } from "convex-test";
+import rateLimiterComponent from "@convex-dev/rate-limiter/test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
@@ -13,6 +14,7 @@ afterEach(() => {
 
 async function createUserFixture() {
   const t = convexTest(schema, modules);
+  rateLimiterComponent.register(t);
   const ownerId = await t.run((ctx) =>
     ctx.db.insert("users", { email: "owner@example.invalid" }),
   );
@@ -1166,4 +1168,21 @@ test("a failed reply interpretation can be retried by the owner only", async () 
   const decision = await t.run((ctx) => ctx.db.get("decisions", fixture.decisionId));
   expect(decision?.status).toBe("reply_received");
   expect(decision?.operationalFailure).toBeUndefined();
+});
+
+test("research runs are metered per account on the shared beta", async () => {
+  const { t, ownerId } = await createUserFixture();
+  const asOwner = t.withIdentity({ subject: ownerId });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await asOwner.mutation(api.decisions.create, {
+      sourceUrl: `https://www.example.com/stay-${attempt}`,
+      requirementText: "Free cancellation until 48 hours before arrival.",
+    });
+  }
+  await expect(
+    asOwner.mutation(api.decisions.create, {
+      sourceUrl: "https://www.example.com/stay-limited",
+      requirementText: "Free cancellation until 48 hours before arrival.",
+    }),
+  ).rejects.toThrow("Try again in");
 });

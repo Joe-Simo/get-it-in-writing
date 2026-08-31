@@ -16,8 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { workedExample } from "@/lib/workedExample";
 
 const decisionTypes = ["Hotel", "Apartment", "Venue", "Product", "Contractor", "Storage", "Rental"];
+
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -114,6 +116,16 @@ export default function LandingPage() {
             <Button type="submit" className="mt-8 h-13 w-full rounded-none bg-cobalt text-white hover:bg-[#153ae8]">
               Check before I rely on it <ArrowRight aria-hidden="true" />
             </Button>
+            <button
+              type="button"
+              className="worked-example-fill"
+              onClick={() => {
+                setSourceUrl(workedExample.sourceUrl);
+                setRequirementText(workedExample.requirementText);
+              }}
+            >
+              No page handy? Fill a worked example — a real hotel and a real “must be true.”
+            </button>
             <div className="intake-assurance">
               <LockKeyhole aria-hidden="true" />
               <span>Private by default. Nothing is sent without your approval.</span>

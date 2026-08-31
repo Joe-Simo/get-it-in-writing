@@ -2,6 +2,7 @@ import { defineApp } from "convex/server";
 import { v } from "convex/values";
 import agentmailComponent from "@agentmail/convex/convex.config";
 import firecrawlComponent from "@firecrawl/firecrawl-convex/convex.config";
+import rateLimiter from "@convex-dev/rate-limiter/convex.config";
 import staticHosting from "@convex-dev/static-hosting/convex.config";
 
 const app = defineApp({
@@ -25,6 +26,7 @@ app.use(firecrawlComponent, {
     FIRECRAWL_WEBHOOK_SECRET: app.env.FIRECRAWL_WEBHOOK_SECRET,
   },
 });
+app.use(rateLimiter);
 app.use(staticHosting);
 
 export default app;
