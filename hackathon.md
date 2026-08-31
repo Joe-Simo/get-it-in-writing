@@ -330,3 +330,27 @@ explore-but-never-send contract, the production build, and 20 browser
 journeys re-written to ride the demo wallet, then deployed only
 `joe-simo/get-it-in-writing` and confirmed at runtime that sign-up is
 refused, the waitlist accepts, and the demo wallet still signs in.
+
+### 2026-08-31 - demo film
+
+Produced the 92.5-second 4K60 demo film entirely against the live product with
+the shared demo wallet: a virtual-clock capture pipeline renders one frame per
+simulated tick so every scene is deterministic 60fps, while real network time
+keeps flowing — the research scene films an actual pipeline run on
+abodehotels.com.au as a natural timelapse (create → scope → read official
+pages → reliance map → approval needed, ~2 minutes compressed to 14 seconds).
+Eight scenes: ink-stage hero, demo-wallet sign-in, live research, reliance map
+with conflicting passages, the approval gate (checkbox armed, nothing sent),
+the written-reply Proof Card with the maker's real reply opened, the
+source-backed Proof Card, and the closing hero.
+
+Capture surfaced a real product-neutral issue: framer-motion card entrances
+never complete under a faked clock, so wallet scenes were shot with
+prefers-reduced-motion emulated, which the app already supports properly.
+Assembly: per-scene retimes (three-segment for the research timelapse),
+dip-to-black joins, a light grade, and a woman's narration (ElevenLabs Sarah)
+mixed wall-to-wall with quiet sine beds at the open and close, loudness
+normalized to -14.8 LUFS. QC gates all pass: zero freeze events, zero
+silences over 3.6 seconds, under three minutes. The decision the film creates
+was removed from the demo wallet afterward, and the local TTS key copy was
+destroyed (rotation still pending on the ElevenLabs side).
