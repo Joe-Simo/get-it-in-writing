@@ -65,3 +65,24 @@ export const seedDecision = internalMutation({
     return decisionId;
   },
 });
+
+// Removes a decision from the demo wallet only — used when a seeded case ends
+// in an operational failure that has no place in the showcase. Regular users'
+// decisions are never touchable here.
+export const removeSeeded = internalMutation({
+  args: { decisionId: v.id("decisions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const decision = await ctx.db.get("decisions", args.decisionId);
+    if (decision === null) return null;
+    const owner = await ctx.db.get("users", decision.ownerId);
+    if (owner?.email !== DEMO_WALLET_EMAIL) {
+      throw new Error("removeSeeded only operates on the demo wallet");
+    }
+    await ctx.db.delete("decisions", decision._id);
+    await ctx.scheduler.runAfter(0, internal.decisions.purgeDecisionGraph, {
+      decisionId: decision._id,
+    });
+    return null;
+  },
+});
