@@ -7,12 +7,12 @@
 - **Repo:** https://github.com/Joe-Simo/get-it-in-writing
 - **Frontend:** Convex static hosting
 - **Convex deployment:** https://resilient-salamander-937.convex.cloud
-- **Components:** @agentmail/convex, @firecrawl/firecrawl-convex, @convex-dev/static-hosting
+- **Components:** @agentmail/convex, @firecrawl/firecrawl-convex, @convex-dev/rate-limiter, @convex-dev/static-hosting
 - **Convex features:** schema, tables, indexes, realtime queries, mutations, actions, HTTP actions, scheduled functions, crons
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-31T00:23:19Z
+- **Last updated:** 2026-08-31T01:20:22Z
 
 ## Log
 
@@ -258,3 +258,19 @@ Clarified the account-creation error when an email already has a wallet.
 Verified strict lint and type checking, 30 tests, and the production build,
 deployed only `joe-simo/signal-garden-all-gas`, and confirmed one real reset
 code delivered through AgentMail on the live deployment.
+
+### 2026-08-31 - 23b7437
+
+Prepared the app for public judging traffic. Mounted the official Convex rate
+limiter component and metered the costly boundaries — research runs per
+account and across the deployment, approved sends per account and across the
+deployment, and password-reset codes per address — with calm, user-facing
+copy that says exactly when to retry (`convex/limits.ts`,
+`convex/convex.config.ts`). Added a one-click worked example to the landing
+card and the new-decision form that runs the genuine crawl and analysis
+against an official page the pipeline has already handled in production.
+
+Verified strict lint and type checking, 31 tests including per-account
+metering coverage, the production build, and 23 desktop/mobile browser
+journeys with Axe (which caught and forced a contrast fix on the new example
+control), then deployed only `joe-simo/get-it-in-writing`.
