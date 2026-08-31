@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   ArrowRight,
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Brand } from "@/components/Brand";
-import { PromiseSeal } from "@/components/PromiseSeal";
+import { InkStage } from "@/visual/ink/InkStage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,8 @@ const decisionTypes = ["Hotel", "Apartment", "Venue", "Product", "Contractor", "
 export default function LandingPage() {
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
+  const heroRef = useRef<HTMLElement>(null);
+  const probablyRef = useRef<HTMLElement>(null);
   const [sourceUrl, setSourceUrl] = useState("");
   const [requirementText, setRequirementText] = useState("");
 
@@ -54,8 +56,8 @@ export default function LandingPage() {
       </header>
 
       <main id="main">
-        <section className="hero-stage">
-          <PromiseSeal className="hero-seal" intensity={0.86} />
+        <section className="hero-stage" ref={heroRef}>
+          <InkStage hostRef={heroRef} emitterRef={probablyRef} />
           <motion.div
             className="hero-copy"
             initial={reducedMotion ? false : { y: 18 }}
@@ -63,7 +65,7 @@ export default function LandingPage() {
             transition={{ duration: 0.58, ease: [0.22, 1, 0.36, 1] }}
           >
             <p className="ink-label">Decision protection for everyday life</p>
-            <h1>Don’t rely on<br /><em>“probably.”</em></h1>
+            <h1>Don’t rely on<br /><em ref={probablyRef}>“probably.”</em></h1>
             <p className="hero-deck">
               Before you book, rent, buy, or hire, find out what the official page actually promises—and get the important gap confirmed in writing.
             </p>

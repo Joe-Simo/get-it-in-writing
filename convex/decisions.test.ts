@@ -1186,3 +1186,32 @@ test("research runs are metered per account on the shared beta", async () => {
     }),
   ).rejects.toThrow("Try again in");
 });
+
+test("the shared demo wallet is read-only and seeded only by the real pipeline", async () => {
+  const { t } = await createUserFixture();
+  const demoId = await t.run((ctx) =>
+    ctx.db.insert("users", { email: "judge@getitinwriting.demo" }),
+  );
+
+  await expect(
+    t.withIdentity({ subject: demoId }).mutation(api.decisions.create, {
+      sourceUrl: "https://www.example.com/stay",
+      requirementText: "Free cancellation until 48 hours before arrival.",
+    }),
+  ).rejects.toThrow("read-only");
+
+  const seededId = await t.mutation(internal.demo.seedDecision, {
+    sourceUrl: "https://www.example.com/stay",
+    requirementText: "Free cancellation until 48 hours before arrival.",
+  });
+  const seeded = await t
+    .withIdentity({ subject: demoId })
+    .query(api.decisions.getDetail, { decisionId: seededId });
+  expect(seeded?.decision.status).toBe("scoping");
+
+  await expect(
+    t.withIdentity({ subject: demoId }).mutation(api.decisions.remove, {
+      decisionId: seededId,
+    }),
+  ).rejects.toThrow("read-only");
+});

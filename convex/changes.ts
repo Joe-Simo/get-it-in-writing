@@ -8,7 +8,7 @@ import {
   internalQuery,
   mutation,
 } from "./_generated/server";
-import { requireUserId } from "./model/auth";
+import { requireInteractiveUser } from "./model/auth";
 
 const firecrawl = new FirecrawlClient(components.firecrawl);
 
@@ -253,7 +253,7 @@ export const requestCheck = mutation({
   args: { decisionId: v.id("decisions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerId = await requireUserId(ctx);
+    const ownerId = await requireInteractiveUser(ctx);
     const decision = await ctx.db.get("decisions", args.decisionId);
     if (decision === null || decision.ownerId !== ownerId) throw new ConvexError("This decision could not be found.");
     const monitor = await ctx.db
@@ -273,7 +273,7 @@ export const acknowledge = mutation({
   args: { sourceChangeId: v.id("sourceChanges") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerId = await requireUserId(ctx);
+    const ownerId = await requireInteractiveUser(ctx);
     const change = await ctx.db.get("sourceChanges", args.sourceChangeId);
     if (change === null) throw new ConvexError("This source change could not be found.");
     const decision = await ctx.db.get("decisions", change.decisionId);

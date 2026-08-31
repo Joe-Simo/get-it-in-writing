@@ -19,7 +19,7 @@ import {
 import { proofVerdict } from "./lib/decisionState";
 import { enforceResetCodeLimit, enforceSendLimit } from "./limits";
 import { boundedText, normalizeEmail } from "./lib/validation";
-import { requireUserId } from "./model/auth";
+import { requireInteractiveUser, requireUserId } from "./model/auth";
 import schema from "./schema";
 
 declare const process: { env: Record<string, string | undefined> };
@@ -206,7 +206,7 @@ async function requireOwnedRequest(
   ctx: MutationCtx,
   requestId: Id<"confirmationRequests">,
 ) {
-  const ownerId = await requireUserId(ctx);
+  const ownerId = await requireInteractiveUser(ctx);
   const request = await ctx.db.get("confirmationRequests", requestId);
   if (request === null) throw new ConvexError("This confirmation request could not be found.");
   if (request.ownerId !== ownerId) throw new ConvexError("This confirmation request is private to its owner.");
@@ -863,7 +863,7 @@ export const retryReplyInterpretation = mutation({
   args: { decisionId: v.id("decisions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerId = await requireUserId(ctx);
+    const ownerId = await requireInteractiveUser(ctx);
     const decision = await ctx.db.get("decisions", args.decisionId);
     if (decision === null || decision.ownerId !== ownerId) {
       throw new ConvexError("This decision could not be found.");
@@ -916,7 +916,7 @@ export const createFollowUpDraft = mutation({
   args: { proofCardId: v.id("proofCards") },
   returns: v.id("confirmationRequests"),
   handler: async (ctx, args) => {
-    const ownerId = await requireUserId(ctx);
+    const ownerId = await requireInteractiveUser(ctx);
     const proofCard = await ctx.db.get("proofCards", args.proofCardId);
     if (proofCard === null || proofCard.ownerId !== ownerId) {
       throw new ConvexError("This Proof Card could not be found.");

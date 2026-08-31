@@ -341,6 +341,22 @@
   opacity: 0.22;
   transform: translate(-50%, -50%);
 }
+.ink-stage {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+}
+.ink-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+  transition: opacity 700ms ease-out;
+}
+.ink-stage[data-webgpu="loading"] canvas {
+  opacity: 0;
+}
 .hero-copy,
 .decision-intake {
   position: relative;
@@ -2304,7 +2320,8 @@
 }
 
 @media (forced-colors: active) {
-  .promise-seal {
+  .promise-seal,
+  .ink-stage {
     display: none;
   }
   .ticket-shell,

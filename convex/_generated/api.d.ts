@@ -15,6 +15,7 @@ import type * as confirmationOpenAI from "../confirmationOpenAI.js";
 import type * as confirmations from "../confirmations.js";
 import type * as crons from "../crons.js";
 import type * as decisions from "../decisions.js";
+import type * as demo from "../demo.js";
 import type * as http from "../http.js";
 import type * as lib_decisionState from "../lib/decisionState.js";
 import type * as lib_officialContact from "../lib/officialContact.js";
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   confirmations: typeof confirmations;
   crons: typeof crons;
   decisions: typeof decisions;
+  demo: typeof demo;
   http: typeof http;
   "lib/decisionState": typeof lib_decisionState;
   "lib/officialContact": typeof lib_officialContact;

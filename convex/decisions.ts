@@ -24,7 +24,7 @@ import {
   sourceHost,
 } from "./lib/validation";
 import { enforceResearchLimit } from "./limits";
-import { requireUserId } from "./model/auth";
+import { requireInteractiveUser, requireUserId } from "./model/auth";
 import schema from "./schema";
 
 type DecisionStatus = Infer<typeof decisionStatus>;
@@ -50,7 +50,7 @@ async function requireOwnedDecision(
   ctx: MutationCtx,
   decisionId: Id<"decisions">,
 ) {
-  const ownerId = await requireUserId(ctx);
+  const ownerId = await requireInteractiveUser(ctx);
   const decision = await ctx.db.get("decisions", decisionId);
   if (decision === null) throw new ConvexError("This decision could not be found.");
   if (decision.ownerId !== ownerId) throw new ConvexError("This decision is private to its owner.");
@@ -353,7 +353,7 @@ export const create = mutation({
   },
   returns: v.id("decisions"),
   handler: async (ctx, args) => {
-    const ownerId = await requireUserId(ctx);
+    const ownerId = await requireInteractiveUser(ctx);
     await enforceResearchLimit(ctx, ownerId);
     const sourceUrl = normalizeOfficialUrl(args.sourceUrl);
     const requirementText = normalizeRequirement(args.requirementText);
