@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-5.6-luna
 - **Started:** 2026-08-29T23:28:53Z
-- **Last updated:** 2026-08-30T22:36:30Z
+- **Last updated:** 2026-08-31T00:08:09Z
 
 ## Log
 
@@ -218,3 +218,30 @@ component to use Convex's isolated environment-variable mapping, scoped the
 production credential to this app's single inbox, and deployed only
 `joe-simo/signal-garden-all-gas`. Verified strict lint and type checking, 27
 unit/integration tests, the production build, and 23 applicable browser checks.
+
+### 2026-08-31 - 6ce680b
+
+Ran a full readiness audit of the backend, workspace, and live site, then
+hardened the real decision lifecycle around provider behavior. Replies from
+another mailbox on the recipient's own domain are now accepted, while
+unrelated senders are set aside with a visible case-record trace instead of
+disappearing. A failed reply interpretation gained an owner-only retry, late
+delivery events can no longer pull a finished case back to waiting or stamp
+false failures, hard-stalled pipeline stages unlock the existing retry, stale
+crawl callbacks are ignored, and case deletion continues across transactions
+(`convex/confirmations.ts`, `convex/decisions.ts`, `convex/research.ts`).
+
+Because production redacts plain error messages, every user-facing error now
+travels as ConvexError with real copy. Fixed the confirmation panel showing a
+published contact while a saved manual address would receive the email, added
+the missing auth loading state, made malformed case links render the designed
+not-found state, gave source checks visible feedback, repainted the
+reduced-motion seal after resizes, lifted sub-10px evidence type, and
+tightened wallet filter semantics (`src/backend/`, `src/components/`,
+`src/index.css`). Added the brand favicon set and a social share card.
+
+Verified strict lint and type checking, 30 unit/integration tests including
+new late-event and reply-retry regression coverage, the production build, and
+23 desktop/mobile browser journeys, then deployed only
+`joe-simo/signal-garden-all-gas` and confirmed the live site serves the new
+assets with no console errors.
