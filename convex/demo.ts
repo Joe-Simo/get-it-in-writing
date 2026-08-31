@@ -1,14 +1,20 @@
+import { AgentMail, type OutboundId } from "@agentmail/convex";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import {
   assertSupportedDecision,
   normalizeContext,
+  normalizeEmail,
   normalizeOfficialUrl,
   normalizeRequirement,
   sourceHost,
 } from "./lib/validation";
 import { DEMO_WALLET_EMAIL } from "./model/auth";
+
+declare const process: { env: Record<string, string | undefined> };
+
+const agentmail: AgentMail = new AgentMail(components.agentmail);
 
 // Seeds a decision into the shared judge demo wallet and hands it to the
 // genuine research pipeline — the resulting reliance map, contacts, and drafts
@@ -84,5 +90,70 @@ export const removeSeeded = internalMutation({
       decisionId: decision._id,
     });
     return null;
+  },
+});
+
+
+// Sends a demo-wallet draft on the operator's explicit instruction. The
+// product's approval invariant holds: the wallet's owner is the operator, and
+// this internal function is only reachable through their own deployment
+// tooling — never from a browser. Used for the transparent self-referential
+// case where the maker confirms the product's own promises in writing.
+export const approveSeededSend = internalMutation({
+  args: { decisionId: v.id("decisions"), recipient: v.string() },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    const decision = await ctx.db.get("decisions", args.decisionId);
+    if (decision === null) throw new Error("Decision not found");
+    const owner = await ctx.db.get("users", decision.ownerId);
+    if (owner?.email !== DEMO_WALLET_EMAIL) {
+      throw new Error("approveSeededSend only operates on the demo wallet");
+    }
+    const request = await ctx.db
+      .query("confirmationRequests")
+      .withIndex("by_decisionId_and_createdAt", (q) => q.eq("decisionId", decision._id))
+      .order("desc")
+      .first();
+    if (request === null || request.status !== "draft") {
+      throw new Error("The demo decision has no unsent draft to approve");
+    }
+    const recipient = normalizeEmail(args.recipient);
+    const inboxId = process.env.AGENTMAIL_INBOX_ID;
+    if (!inboxId) throw new Error("AgentMail is not configured for this deployment");
+    const outboundId: OutboundId = await agentmail.sendMessage(ctx, inboxId, {
+      to: recipient,
+      subject: request.subject,
+      text: request.body,
+      labels: ["get-it-in-writing", request.requestToken.toLowerCase()],
+      headers: { "X-Get-It-In-Writing-Request": request.requestToken },
+    });
+    const now = Date.now();
+    await ctx.db.patch("confirmationRequests", request._id, {
+      recipient,
+      recipientSource: "user_provided",
+      status: "pending",
+      outboundId,
+      approvedAt: now,
+      sentAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.patch("decisions", decision._id, {
+      status: "sending",
+      operationalFailure: undefined,
+      operationalMessage: undefined,
+      updatedAt: now,
+    });
+    await ctx.db.insert("decisionEvents", {
+      decisionId: decision._id,
+      fromStatus: decision.status,
+      toStatus: "sending",
+      label: `The product's maker approved the exact request to ${recipient}`,
+      occurredAt: now,
+    });
+    await ctx.scheduler.runAfter(3_000, internal.confirmations.reconcileOutbound, {
+      requestId: request._id,
+      attempt: 0,
+    });
+    return outboundId;
   },
 });
