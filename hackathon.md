@@ -4,7 +4,7 @@
 - **Event:** Convex All Gas Hackathon
 - **What it does:** Checks every requirement behind an everyday decision against official sources, gets only consequential gaps confirmed in writing with the user's approval, and preserves scoped evidence and conditions in a private Proof Card.
 - **Live app:** https://resilient-salamander-937.convex.site
-- **Repo:** https://github.com/Joe-Simo/signal-garden-all-gas
+- **Repo:** https://github.com/Joe-Simo/get-it-in-writing
 - **Frontend:** Convex static hosting
 - **Convex deployment:** https://resilient-salamander-937.convex.cloud
 - **Components:** @agentmail/convex, @firecrawl/firecrawl-convex, @convex-dev/static-hosting
