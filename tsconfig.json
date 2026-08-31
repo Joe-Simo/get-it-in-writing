@@ -51,6 +51,9 @@
   ],
   "exclude": [
     "node_modules",
-    "convex"
+    "convex",
+    "**/* 2.ts",
+    "**/* 2.tsx",
+    "**/* 2.d.ts"
   ]
 }

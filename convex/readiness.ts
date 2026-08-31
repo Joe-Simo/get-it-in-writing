@@ -149,6 +149,64 @@ export const providers = internalAction({
   },
 });
 
+// The sending inbox predates the current product, so its display name can lag
+// the brand. This idempotent action reads the inbox identity and updates the
+// display name recipients see on outgoing mail.
+export const inboxIdentity = internalAction({
+  args: { displayName: v.optional(v.string()) },
+  returns: v.object({
+    username: v.optional(v.string()),
+    displayNameBefore: v.optional(v.string()),
+    displayNameAfter: v.optional(v.string()),
+    updated: v.boolean(),
+    failureStage: v.optional(v.string()),
+    failureStatus: v.optional(v.number()),
+  }),
+  handler: async (_ctx, args) => {
+    const apiKey = process.env.AGENTMAIL_API_KEY;
+    const inboxId = process.env.AGENTMAIL_INBOX_ID;
+    if (!apiKey || !inboxId) {
+      return { updated: false, failureStage: "configuration" };
+    }
+    const baseUrl = (process.env.AGENTMAIL_BASE_URL ?? "https://api.agentmail.to/v0").replace(/\/$/, "");
+    const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+    const inboxUrl = `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}`;
+    const getResponse = await fetch(inboxUrl, { headers });
+    if (!getResponse.ok) {
+      return { updated: false, failureStage: "get", failureStatus: getResponse.status };
+    }
+    const before = record(await getResponse.json());
+    const username = typeof before.username === "string" ? before.username : undefined;
+    const displayNameBefore =
+      typeof before.display_name === "string" ? before.display_name : undefined;
+    if (!args.displayName || args.displayName === displayNameBefore) {
+      return { username, displayNameBefore, displayNameAfter: displayNameBefore, updated: false };
+    }
+    const updateResponse = await fetch(inboxUrl, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ display_name: args.displayName }),
+    });
+    if (!updateResponse.ok) {
+      return {
+        username,
+        displayNameBefore,
+        updated: false,
+        failureStage: "update",
+        failureStatus: updateResponse.status,
+      };
+    }
+    const after = record(await updateResponse.json());
+    return {
+      username,
+      displayNameBefore,
+      displayNameAfter:
+        typeof after.display_name === "string" ? after.display_name : args.displayName,
+      updated: true,
+    };
+  },
+});
+
 export const ensureAgentMailWebhook = internalAction({
   args: { expectedUrl: v.string() },
   returns: v.object({
