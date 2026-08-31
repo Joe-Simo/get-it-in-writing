@@ -89,6 +89,23 @@ function replyOnly(value: string) {
   return (body.trim() || value.trim()).slice(0, 20_000);
 }
 
+function htmlToText(value: string) {
+  return value
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<(?:br|\/p|\/div|\/li|\/tr|\/h[1-6])\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/[\t ]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim();
+}
+
 function overallVerdict(outcomes: Array<{ verdict: ProofVerdict }>): ProofVerdict {
   const verdicts = outcomes.map((outcome) => outcome.verdict);
   if (verdicts.length === 0 || verdicts.some((verdict) => verdict === "needs_followup")) {
@@ -555,11 +572,12 @@ export const onMessageReceived = internalMutation({
       .first();
     if (prior !== null) return null;
     const subject = (stringField(message, "subject") ?? "").slice(0, 500);
+    const rawHtml = stringField(message, "html");
     const body = (
       stringField(message, "extracted_text") ??
       stringField(message, "text") ??
       stringField(message, "preview") ??
-      ""
+      (rawHtml ? htmlToText(rawHtml) : "")
     ).slice(0, 20_000);
     const analysisBody = replyOnly(body);
     let request = await ctx.db
@@ -625,7 +643,85 @@ export const onMessageReceived = internalMutation({
       label: "A real written reply arrived",
       occurredAt: Date.now(),
     });
-    await ctx.scheduler.runAfter(0, internal.confirmationOpenAI.interpret, { replyId });
+    if (body.trim() === "") {
+      // Some mail clients send HTML-only messages whose webhook payload has no
+      // text at all; fetch the full message before interpreting, so an empty
+      // page is never scored as the provider's answer.
+      await ctx.scheduler.runAfter(0, internal.confirmations.hydrateReply, { replyId });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.confirmationOpenAI.interpret, { replyId });
+    }
+    return null;
+  },
+});
+
+export const hydrateReply = internalAction({
+  args: { replyId: v.id("confirmationReplies") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const context = await ctx.runQuery(internal.confirmations.getReplyContext, args);
+    if (context === null) return null;
+    if (context.reply.body.trim() !== "") {
+      await ctx.scheduler.runAfter(0, internal.confirmationOpenAI.interpret, args);
+      return null;
+    }
+    const inboxId = process.env.AGENTMAIL_INBOX_ID;
+    try {
+      if (!inboxId) throw new Error("AgentMail is not configured");
+      const apiKey = process.env.AGENTMAIL_API_KEY;
+      if (!apiKey) throw new Error("AgentMail credentials are unavailable");
+      const baseUrl = (process.env.AGENTMAIL_BASE_URL ?? "https://api.agentmail.to/v0").replace(/\/$/, "");
+      const response = await fetch(
+        `${baseUrl}/inboxes/${encodeURIComponent(inboxId)}/threads/${encodeURIComponent(context.reply.threadId)}`,
+        { headers: { Authorization: `Bearer ${apiKey}` } },
+      );
+      if (!response.ok) throw new Error(`AgentMail thread fetch failed: ${response.status}`);
+      const thread = asRecord(await response.json());
+      const messages = Array.isArray(thread.messages) ? thread.messages.map(asRecord) : [];
+      const found =
+        messages.find((item) => stringField(item, "message_id") === context.reply.messageId) ??
+        messages.at(-1) ??
+        {};
+      const html = stringField(found, "html");
+      const body = (
+        stringField(found, "extracted_text") ??
+        stringField(found, "text") ??
+        (html ? htmlToText(html) : "")
+      ).slice(0, 20_000);
+      if (body.trim() === "") throw new Error("The stored message has no readable content");
+      await ctx.runMutation(internal.confirmations.applyReplyBody, {
+        replyId: args.replyId,
+        body,
+      });
+    } catch (error) {
+      console.error(
+        "Get It in Writing reply hydration failed",
+        error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "UnknownError",
+      );
+      await ctx.runMutation(internal.decisions.recordOperationalFailure, {
+        decisionId: context.decision._id,
+        kind: "reply_processing_failed",
+        message:
+          "The written reply arrived, but its content could not be read yet. The original message is safe; re-process it to try again.",
+      });
+    }
+    return null;
+  },
+});
+
+export const applyReplyBody = internalMutation({
+  args: { replyId: v.id("confirmationReplies"), body: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const reply = await ctx.db.get("confirmationReplies", args.replyId);
+    if (reply === null) return null;
+    await ctx.db.patch("confirmationReplies", reply._id, {
+      body: args.body,
+      analysisBody: replyOnly(args.body),
+    });
+    await ctx.scheduler.runAfter(0, internal.confirmationOpenAI.interpret, {
+      replyId: reply._id,
+    });
     return null;
   },
 });

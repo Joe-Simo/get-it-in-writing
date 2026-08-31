@@ -1215,3 +1215,62 @@ test("the shared demo wallet is read-only and seeded only by the real pipeline",
     }),
   ).rejects.toThrow("read-only");
 });
+
+test("an HTML-only reply is converted to readable text before interpretation", async () => {
+  vi.stubEnv("AGENTMAIL_INBOX_ID", "inbox_get_it_in_writing");
+  const { t, ownerId } = await createUserFixture();
+  const fixture = await t.run(async (ctx) => {
+    const decisionId = await ctx.db.insert("decisions", {
+      ownerId,
+      title: "Example venue",
+      sourceUrl: "https://example.com/venue",
+      sourceHost: "example.com",
+      requirementText: "Outside catering must be permitted.",
+      category: "venue",
+      status: "waiting",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const requestId = await ctx.db.insert("confirmationRequests", {
+      decisionId,
+      ownerId,
+      requestToken: "GIW-HTMLREPLY1",
+      recipient: "events@example.com",
+      recipientSource: "official_page",
+      subject: "Outside catering [GIW-HTMLREPLY1]",
+      body: "Can you confirm outside catering?",
+      followUpCount: 0,
+      status: "delivered",
+      threadId: "thread_html",
+      sentAt: 2,
+      deliveredAt: 3,
+      createdAt: 2,
+      updatedAt: 3,
+    });
+    return { decisionId, requestId };
+  });
+
+  await t.mutation(internal.confirmations.onMessageReceived, {
+    eventId: "event_html_reply",
+    thread: {},
+    message: {
+      inbox_id: "inbox_get_it_in_writing",
+      thread_id: "thread_html",
+      message_id: "message_html_reply",
+      from: "events@example.com",
+      subject: "Re: Outside catering",
+      html: "<div><p>Yes,&nbsp;outside catering is <b>permitted</b>.</p><br><p>Kind regards</p></div>",
+    },
+  });
+
+  const reply = await t.run(async (ctx) =>
+    ctx.db
+      .query("confirmationReplies")
+      .withIndex("by_requestId_and_receivedAt", (q) =>
+        q.eq("requestId", fixture.requestId),
+      )
+      .first(),
+  );
+  expect(reply?.body).toContain("outside catering is permitted");
+  expect(reply?.body).not.toContain("<p>");
+});
