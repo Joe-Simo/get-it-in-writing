@@ -28,7 +28,7 @@ export default function SignInPage() {
             reason,
             flow === "signIn"
               ? "That email and password combination was not accepted. Check both and try again."
-              : "The account could not be created. Use a valid email and a password of at least 8 characters.",
+              : "The account could not be created. If this email already has a wallet, choose “Already have an account? Sign in” below; otherwise use a valid email and a password of at least 8 characters.",
           ),
         ),
       )
